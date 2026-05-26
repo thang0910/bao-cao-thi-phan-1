@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Báo cáo Thị phần R (CellphoneS) vs Y (MWG)</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+       background: #f5f7fa; color: #2c3e50; line-height: 1.55; padding: 16px; }
+.container { max-width: 1320px; margin: 0 auto; }
+
+header { background: linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%); color: white;
+         padding: 28px 32px; border-radius: 16px; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+header h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+header .subtitle { font-size: 14px; opacity: 0.92; }
+header .meta { margin-top: 12px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 12px; opacity: 0.85; }
+
+.section { background: white; border-radius: 14px; padding: 22px 26px; margin-bottom: 16px;
+           box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.section h2 { font-size: 19px; color: #1e3a8a; margin-bottom: 4px;
+              padding-bottom: 10px; border-bottom: 2px solid #e5e7eb; }
+.section h2 .num { color: #7c3aed; margin-right: 8px; }
+.section .sub { font-size: 13px; color: #6b7280; margin-bottom: 16px; margin-top: 6px; }
+
+/* === FILTER PANEL === */
+.filter-panel { position: sticky; top: 8px; z-index: 100; background: white;
+                border: 2px solid #1e3a8a; border-radius: 14px; padding: 16px 22px;
+                margin-bottom: 16px; box-shadow: 0 4px 16px rgba(30,58,138,.12); }
+.filter-panel h3 { font-size: 14px; color: #1e3a8a; margin-bottom: 12px;
+                   display: flex; align-items: center; justify-content: space-between; }
+.filter-panel h3 .badge { background: #1e3a8a; color: white; padding: 3px 10px;
+                          border-radius: 12px; font-size: 11px; font-weight: 600; }
+.filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.filter-item { display: flex; flex-direction: column; gap: 4px; }
+.filter-item label { font-size: 11px; color: #6b7280; font-weight: 600;
+                     text-transform: uppercase; letter-spacing: 0.3px; }
+.filter-item input, .filter-item select, .filter-item button {
+  padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;
+  background: white; font-family: inherit;
+}
+.filter-item input:focus, .filter-item select:focus {
+  outline: none; border-color: #1e3a8a; box-shadow: 0 0 0 3px rgba(30,58,138,.1);
+}
+.multi-select { position: relative; }
+.multi-select .ms-trigger {
+  width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+  background: white; cursor: pointer; font-size: 13px; text-align: left;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.multi-select .ms-trigger .caret { font-size: 10px; color: #6b7280; }
+.multi-select .ms-trigger.has-value { border-color: #1e3a8a; background: #eff6ff; font-weight: 500; }
+.multi-select .ms-dropdown {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 280px; overflow-y: auto; background: white;
+  border: 1px solid #1e3a8a; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.1);
+  z-index: 200; padding: 4px;
+}
+.multi-select.open .ms-dropdown { display: block; }
+.multi-select .ms-search {
+  width: 100%; padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 4px;
+  font-size: 12px; margin-bottom: 4px;
+}
+.multi-select .ms-option {
+  padding: 6px 8px; cursor: pointer; border-radius: 4px;
+  font-size: 12px; display: flex; align-items: center; gap: 6px;
+}
+.multi-select .ms-option:hover { background: #eff6ff; }
+.multi-select .ms-option input[type=checkbox] { margin: 0; }
+.filter-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.btn { padding: 7px 14px; border: 1px solid transparent; border-radius: 6px;
+       font-size: 12px; font-weight: 600; cursor: pointer; }
+.btn-primary { background: #1e3a8a; color: white; }
+.btn-primary:hover { background: #1e40af; }
+.btn-secondary { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
+.btn-secondary:hover { background: #e5e7eb; }
+.btn-preset { background: white; color: #1e3a8a; border-color: #1e3a8a; }
+.btn-preset:hover { background: #eff6ff; }
+.filter-info { font-size: 12px; color: #6b7280; margin-top: 8px;
+               padding-top: 8px; border-top: 1px solid #e5e7eb; }
+.filter-info .hl { color: #1e3a8a; font-weight: 600; }
+
+/* === KPI === */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px; margin-bottom: 14px; }
+.kpi { background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+       border-left: 4px solid #1e3a8a; padding: 14px 16px; border-radius: 10px; }
+.kpi.y { border-left-color: #f59e0b; }
+.kpi.share { border-left-color: #10b981; }
+.kpi.gap { border-left-color: #ef4444; }
+.kpi .label { font-size: 11px; color: #6b7280; text-transform: uppercase;
+              font-weight: 600; letter-spacing: 0.5px; }
+.kpi .value { font-size: 22px; font-weight: 700; color: #111827; margin-top: 4px; }
+.kpi .sub-value { font-size: 12px; color: #6b7280; margin-top: 3px; }
+.kpi .pct { color: #10b981; font-weight: 600; }
+.chart-wrap { position: relative; height: 320px; margin: 12px 0; }
+.chart-wrap.tall { height: 420px; }
+.chart-wrap.xtall { height: 560px; }
+.chart-wrap.short { height: 240px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+table th { background: #f3f4f6; color: #374151; font-weight: 600; text-align: left;
+           padding: 9px 11px; border-bottom: 2px solid #e5e7eb; font-size: 11px;
+           text-transform: uppercase; letter-spacing: 0.3px; position: sticky; top: 0; }
+table th.right, table td.right { text-align: right; }
+table th.center, table td.center { text-align: center; }
+table td { padding: 8px 11px; border-bottom: 1px solid #f3f4f6; }
+table tr:hover { background: #fafbfc; }
+.tbl-scroll { max-height: 460px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+.brand-cell { font-weight: 600; color: #111827; }
+
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px;
+       font-size: 11px; font-weight: 600; }
+.tag-win { background: #d1fae5; color: #065f46; }
+.tag-lose { background: #fee2e2; color: #991b1b; }
+.tag-bal { background: #fef3c7; color: #92400e; }
+
+.insight { background: #eff6ff; border-left: 4px solid #1e3a8a; padding: 12px 16px;
+           border-radius: 8px; margin: 12px 0; font-size: 13px; }
+.insight strong { color: #1e3a8a; }
+.warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px;
+           border-radius: 8px; margin: 12px 0; font-size: 13px; color: #78350f; }
+.share-bar-cell { width: 220px; }
+.share-bar { display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: #e5e7eb; }
+.share-bar > div { display: flex; align-items: center; justify-content: center;
+                   color: white; font-size: 10px; font-weight: 600; }
+.share-bar .R { background: #1e3a8a; }
+.share-bar .Y { background: #f59e0b; }
+
+.toc { background: #1e3a8a; color: white; border-radius: 12px;
+       padding: 14px 22px; margin-bottom: 16px; }
+.toc h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
+          margin-bottom: 8px; opacity: 0.9; }
+.toc ol { margin-left: 18px; columns: 2; column-gap: 24px; }
+.toc a { color: #fbbf24; text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+@media (max-width: 700px) { .toc ol { columns: 1; } }
+
+footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
+.no-data { text-align: center; padding: 40px 20px; color: #9ca3af; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Báo cáo Phân tích Thị phần</h1>
+  <div class="subtitle">R (CellphoneS) vs Y (MWG) — Ngành LOA — Có bộ lọc động</div>
+  <div class="meta" id="header-meta">
+    <span id="meta-range">Khoảng thời gian: —</span>
+    <span id="meta-files">Nguồn: — file</span>
+    <span id="meta-build">Cập nhật: —</span>
+  </div>
+</header>
+
+<!-- FILTER PANEL -->
+<div class="filter-panel">
+  <h3>
+    <span>🔍 Bộ lọc</span>
+    <span class="badge" id="filter-count">0 đang áp dụng</span>
+  </h3>
+  <div class="filter-grid">
+    <div class="filter-item">
+      <label>Từ ngày</label>
+      <input type="date" id="f-date-from">
+    </div>
+    <div class="filter-item">
+      <label>Đến ngày</label>
+      <input type="date" id="f-date-to">
+    </div>
+    <div class="filter-item">
+      <label>Miền</label>
+      <div class="multi-select" id="f-mien"></div>
+    </div>
+    <div class="filter-item">
+      <label>Tỉnh thành</label>
+      <div class="multi-select" id="f-tinh"></div>
+    </div>
+    <div class="filter-item">
+      <label>Thương hiệu</label>
+      <div class="multi-select" id="f-brand"></div>
+    </div>
+    <div class="filter-item">
+      <label>Nhóm sản phẩm</label>
+      <div class="multi-select" id="f-model"></div>
+    </div>
+    <div class="filter-item">
+      <label>Shop</label>
+      <div class="multi-select" id="f-shop"></div>
+    </div>
+  </div>
+  <div class="filter-actions">
+    <button class="btn btn-preset" data-preset="all">Toàn bộ</button>
+    <button class="btn btn-preset" data-preset="7d">7 ngày gần nhất</button>
+    <button class="btn btn-preset" data-preset="30d">30 ngày gần nhất</button>
+    <button class="btn btn-preset" data-preset="this-month">Tháng này</button>
+    <button class="btn btn-preset" data-preset="last-month">Tháng trước</button>
+    <button class="btn btn-secondary" id="btn-reset">↻ Xoá tất cả filter</button>
+  </div>
+  <div class="filter-info" id="filter-info">
+    <span class="hl">—</span> dòng dữ liệu khớp / <span class="hl" id="filter-total">—</span> tổng.
+    Doanh số R+Y khớp filter: <span class="hl" id="filter-rev">—</span>
+  </div>
+</div>
+
+<div class="toc">
+  <h3>Mục lục</h3>
+  <ol>
+    <li><a href="#tongquan">Tổng quan & KPI</a></li>
+    <li><a href="#thoigian">Phân tích theo Thời gian</a></li>
+    <li><a href="#nhomsanpham">Theo Nhóm sản phẩm</a></li>
+    <li><a href="#thuonghieu">Theo Thương hiệu</a></li>
+    <li><a href="#sanpham">Top Sản phẩm</a></li>
+    <li><a href="#diali">Theo Vùng / Tỉnh thành</a></li>
+    <li><a href="#shop">Top Shop</a></li>
+    <li><a href="#kenh">Theo Hình thức xuất</a></li>
+  </ol>
+</div>
+
+<!-- 1. TỔNG QUAN -->
+<section class="section" id="tongquan">
+  <h2><span class="num">1.</span>Tổng quan thị phần <span id="title-note-1" style="font-size:13px; color:#6b7280; font-weight:400;"></span></h2>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="label">Doanh số R (CellphoneS)</div>
+      <div class="value" id="kpi-R">—</div>
+      <div class="sub-value">Thị phần: <span class="pct" id="kpi-R-pct">—</span></div>
+    </div>
+    <div class="kpi y"><div class="label">Doanh số Y (MWG)</div>
+      <div class="value" id="kpi-Y">—</div>
+      <div class="sub-value">Thị phần: <span class="pct" id="kpi-Y-pct">—</span></div>
+    </div>
+    <div class="kpi share"><div class="label">Tổng quy mô (R+Y)</div>
+      <div class="value" id="kpi-tot">—</div>
+      <div class="sub-value" id="kpi-tot-sub">—</div>
+    </div>
+    <div class="kpi gap"><div class="label">Khoảng cách Y-R</div>
+      <div class="value" id="kpi-gap">—</div>
+      <div class="sub-value" id="kpi-gap-sub">—</div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="chart-wrap"><canvas id="c-pie"></canvas></div>
+    <div>
+      <div id="warn-coverage" class="warning" style="display:none;"></div>
+      <div class="insight"><strong>Đọc nhanh:</strong> <span id="quick-read">—</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. THỜI GIAN -->
+<section class="section" id="thoigian">
+  <h2><span class="num">2.</span>Phân tích theo Thời gian</h2>
+
+  <h3 style="margin-top:6px; color:#374151; font-size:14px;">2.1 Theo Tháng</h3>
+  <div class="grid2">
+    <div class="chart-wrap short"><canvas id="c-month-bar"></canvas></div>
+    <div class="chart-wrap short"><canvas id="c-month-share"></canvas></div>
+  </div>
+  <div id="t-month"></div>
+
+  <h3 style="margin-top:18px; color:#374151; font-size:14px;">2.2 Theo Tuần</h3>
+  <div class="grid2">
+    <div class="chart-wrap"><canvas id="c-week-bar"></canvas></div>
+    <div class="chart-wrap"><canvas id="c-week-share"></canvas></div>
+  </div>
+  <div id="t-week"></div>
+
+  <h3 style="margin-top:18px; color:#374151; font-size:14px;">2.3 Theo Ngày</h3>
+  <div class="chart-wrap tall"><canvas id="c-day-line"></canvas></div>
+  <div class="chart-wrap short"><canvas id="c-day-share"></canvas></div>
+
+  <h3 style="margin-top:18px; color:#374151; font-size:14px;">2.4 Theo Thứ trong tuần (trung bình mỗi ngày)</h3>
+  <div class="grid2">
+    <div class="chart-wrap"><canvas id="c-wd-bar"></canvas></div>
+    <div class="chart-wrap"><canvas id="c-wd-share"></canvas></div>
+  </div>
+  <div id="t-wd"></div>
+</section>
+
+<!-- 3. NHÓM SẢN PHẨM -->
+<section class="section" id="nhomsanpham">
+  <h2><span class="num">3.</span>Phân tích theo Nhóm sản phẩm</h2>
+  <div class="grid2">
+    <div class="chart-wrap"><canvas id="c-mg-bar"></canvas></div>
+    <div class="chart-wrap"><canvas id="c-mg-share"></canvas></div>
+  </div>
+  <div id="t-mg"></div>
+</section>
+
+<!-- 4. THƯƠNG HIỆU -->
+<section class="section" id="thuonghieu">
+  <h2><span class="num">4.</span>Phân tích theo Thương hiệu</h2>
+  <div class="chart-wrap xtall"><canvas id="c-brand-bar"></canvas></div>
+  <div id="t-brand"></div>
+</section>
+
+<!-- 5. SẢN PHẨM -->
+<section class="section" id="sanpham">
+  <h2><span class="num">5.</span>Top Sản phẩm</h2>
+  <div class="sub">Top sản phẩm theo tổng doanh số (R+Y) trong phạm vi đang filter.</div>
+  <div id="t-product"></div>
+</section>
+
+<!-- 6. ĐỊA LÝ -->
+<section class="section" id="diali">
+  <h2><span class="num">6.</span>Phân tích theo Vùng / Tỉnh thành</h2>
+  <div class="grid2">
+    <div class="chart-wrap"><canvas id="c-mien-bar"></canvas></div>
+    <div class="chart-wrap"><canvas id="c-mien-share"></canvas></div>
+  </div>
+  <div id="t-mien"></div>
+  <h3 style="margin-top:18px; color:#374151; font-size:14px;">Top 20 Tỉnh thành</h3>
+  <div id="t-tinh"></div>
+</section>
+
+<!-- 7. SHOP -->
+<section class="section" id="shop">
+  <h2><span class="num">7.</span>Top Shop</h2>
+  <div class="sub">Top 30 cửa hàng theo doanh số (cả 2 bên).</div>
+  <div id="t-shop"></div>
+</section>
+
+<!-- 8. KENH -->
+<section class="section" id="kenh">
+  <h2><span class="num">8.</span>Theo Hình thức xuất bán (Kênh)</h2>
+  <div class="grid2">
+    <div>
+      <h3 style="color:#1e3a8a; font-size:14px; margin-bottom:6px;">Cơ cấu kênh của R</h3>
+      <div class="chart-wrap"><canvas id="c-kenh-R"></canvas></div>
+    </div>
+    <div>
+      <h3 style="color:#d97706; font-size:14px; margin-bottom:6px;">Cơ cấu kênh của Y</h3>
+      <div class="chart-wrap"><canvas id="c-kenh-Y"></canvas></div>
+    </div>
+  </div>
+  <div id="t-kenh"></div>
+</section>
+
+<footer>
+  Báo cáo tự động • R = CellphoneS, Y = MWG • Build: <span id="footer-build">—</span>
+</footer>
+</div>
+
+<script>
+// ====== EMBED DATA ======
+const DATA = __DATA_PLACEHOLDER__;
+
+// ====== HELPERS ======
+const COLOR_R = '#1e3a8a';
+const COLOR_R_T = 'rgba(30,58,138,.15)';
+const COLOR_Y = '#f59e0b';
+const COLOR_Y_T = 'rgba(245,158,11,.15)';
+
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#374151';
+
+const fmt = n => {
+  if (n == null || isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n/1e9).toFixed(2).replace('.',',') + ' tỷ';
+  if (abs >= 1e6) return (n/1e6).toFixed(1).replace('.',',') + ' tr';
+  return Math.round(n).toLocaleString('vi-VN');
+};
+const fmtN = n => n==null||isNaN(n)?'—':Math.round(n).toLocaleString('vi-VN');
+const fmtPct = (n, dec=1) => n==null||isNaN(n)?'—':(n*100).toFixed(dec).replace('.',',')+'%';
+
+const DICT = DATA.dict;
+const ROWS = DATA.rows;
+const SCHEMA = DATA.row_schema;
+const IDX = {};
+SCHEMA.forEach((k,i)=>IDX[k]=i);
+
+const WD_NAMES = ['CN','T2','T3','T4','T5','T6','T7']; // JS getDay: 0=Sun
+const WD_ORDER = ['T2','T3','T4','T5','T6','T7','CN'];
+
+// ====== FILTER STATE ======
+const filterState = {
+  dateFrom: null, dateTo: null,
+  mien: new Set(), tinh: new Set(), brand: new Set(),
+  model: new Set(), shop: new Set()
+};
+
+// ====== MULTI-SELECT COMPONENT ======
+function createMultiSelect(containerId, options, placeholder, onChange) {
+  const container = document.getElementById(containerId);
+  const trigger = document.createElement('div');
+  trigger.className = 'ms-trigger';
+  trigger.innerHTML = `<span class="ms-label">${placeholder}</span><span class="caret">▼</span>`;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'ms-dropdown';
+  const search = document.createElement('input');
+  search.className = 'ms-search';
+  search.placeholder = 'Tìm...';
+  dropdown.appendChild(search);
+  const listWrap = document.createElement('div');
+  dropdown.appendChild(listWrap);
+
+  container.classList.add('multi-select');
+  container.appendChild(trigger);
+  container.appendChild(dropdown);
+
+  const selected = new Set();
+  const renderList = (filter='') => {
+    listWrap.innerHTML = '';
+    const f = filter.toLowerCase();
+    options.forEach((opt, idx) => {
+      if (f && !opt.toLowerCase().includes(f)) return;
+      const item = document.createElement('label');
+      item.className = 'ms-option';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = opt;
+      cb.checked = selected.has(opt);
+      cb.addEventListener('change', () => {
+        if (cb.checked) selected.add(opt); else selected.delete(opt);
+        updateTrigger();
+        onChange(selected);
+      });
+      item.appendChild(cb);
+      const span = document.createElement('span');
+      span.textContent = opt || '(rỗng)';
+      item.appendChild(span);
+      listWrap.appendChild(item);
+    });
+  };
+
+  const updateTrigger = () => {
+    const lbl = trigger.querySelector('.ms-label');
+    if (selected.size === 0) {
+      lbl.textContent = placeholder;
+      trigger.classList.remove('has-value');
+    } else if (selected.size === 1) {
+      lbl.textContent = [...selected][0] || '(rỗng)';
+      trigger.classList.add('has-value');
+    } else {
+      lbl.textContent = `${selected.size} đã chọn`;
+      trigger.classList.add('has-value');
+    }
+  };
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.multi-select.open').forEach(el => {
+      if (el !== container) el.classList.remove('open');
+    });
+    container.classList.toggle('open');
+    if (container.classList.contains('open')) {
+      renderList(search.value);
+      search.focus();
+    }
+  });
+  search.addEventListener('input', () => renderList(search.value));
+  search.addEventListener('click', e => e.stopPropagation());
+
+  document.addEventListener('click', (e) => {
+    if (!container.contains(e.target)) container.classList.remove('open');
+  });
+
+  renderList();
+  return {
+    getSelected: () => selected,
+    clear: () => { selected.clear(); updateTrigger(); }
+  };
+}
+
+// ====== INIT FILTERS ======
+const sortedTinh = [...DICT.tinh].sort();
+const sortedBrand = [...DICT.brand].sort();
+const sortedModel = [...DICT.model].sort();
+const sortedShop = [...DICT.shop].sort();
+const sortedMien = [...DICT.mien].sort();
+
+const msMien = createMultiSelect('f-mien', sortedMien, 'Tất cả miền', (s)=>{
+  filterState.mien = s; rebuildAll();
+});
+const msTinh = createMultiSelect('f-tinh', sortedTinh, 'Tất cả tỉnh', (s)=>{
+  filterState.tinh = s; rebuildAll();
+});
+const msBrand = createMultiSelect('f-brand', sortedBrand, 'Tất cả thương hiệu', (s)=>{
+  filterState.brand = s; rebuildAll();
+});
+const msModel = createMultiSelect('f-model', sortedModel, 'Tất cả nhóm', (s)=>{
+  filterState.model = s; rebuildAll();
+});
+const msShop = createMultiSelect('f-shop', sortedShop, 'Tất cả shop', (s)=>{
+  filterState.shop = s; rebuildAll();
+});
+
+const dateFromEl = document.getElementById('f-date-from');
+const dateToEl = document.getElementById('f-date-to');
+// Set min/max
+if (DATA.stats.date_min && DATA.stats.date_max) {
+  dateFromEl.min = DATA.stats.date_min;
+  dateFromEl.max = DATA.stats.date_max;
+  dateToEl.min = DATA.stats.date_min;
+  dateToEl.max = DATA.stats.date_max;
+}
+dateFromEl.addEventListener('change', () => { filterState.dateFrom = dateFromEl.value || null; rebuildAll(); });
+dateToEl.addEventListener('change',   () => { filterState.dateTo   = dateToEl.value   || null; rebuildAll(); });
+
+// Presets
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = btn.dataset.preset;
+    const maxD = DATA.stats.date_max ? new Date(DATA.stats.date_max) : new Date();
+    const minD = DATA.stats.date_min ? new Date(DATA.stats.date_min) : null;
+    let from = null, to = null;
+    if (p === 'all') { from = null; to = null; }
+    else if (p === '7d')   { to = maxD; from = new Date(maxD); from.setDate(from.getDate()-6); }
+    else if (p === '30d')  { to = maxD; from = new Date(maxD); from.setDate(from.getDate()-29); }
+    else if (p === 'this-month')   { from = new Date(maxD.getFullYear(), maxD.getMonth(), 1); to = maxD; }
+    else if (p === 'last-month')   {
+      const lm = new Date(maxD.getFullYear(), maxD.getMonth()-1, 1);
+      from = lm; to = new Date(maxD.getFullYear(), maxD.getMonth(), 0);
+    }
+    const fmtD = d => d ? d.toISOString().slice(0,10) : '';
+    dateFromEl.value = fmtD(from);
+    dateToEl.value = fmtD(to);
+    filterState.dateFrom = dateFromEl.value || null;
+    filterState.dateTo = dateToEl.value || null;
+    rebuildAll();
+  });
+});
+
+// Reset button
+document.getElementById('btn-reset').addEventListener('click', () => {
+  dateFromEl.value = ''; dateToEl.value = '';
+  filterState.dateFrom = null; filterState.dateTo = null;
+  msMien.clear(); msTinh.clear(); msBrand.clear(); msModel.clear(); msShop.clear();
+  filterState.mien.clear(); filterState.tinh.clear();
+  filterState.brand.clear(); filterState.model.clear(); filterState.shop.clear();
+  rebuildAll();
+});
+
+// ====== FILTERING ======
+function applyFilter() {
+  const fs = filterState;
+  const dFrom = fs.dateFrom; const dTo = fs.dateTo;
+  // Pre-resolve indexes for faster filtering
+  const mienSet = fs.mien.size ? new Set([...fs.mien].map(v => DICT.mien.indexOf(v))) : null;
+  const tinhSet = fs.tinh.size ? new Set([...fs.tinh].map(v => DICT.tinh.indexOf(v))) : null;
+  const brandSet = fs.brand.size ? new Set([...fs.brand].map(v => DICT.brand.indexOf(v))) : null;
+  const modelSet = fs.model.size ? new Set([...fs.model].map(v => DICT.model.indexOf(v))) : null;
+  const shopSet = fs.shop.size ? new Set([...fs.shop].map(v => DICT.shop.indexOf(v))) : null;
+
+  const di = IDX.date, mi = IDX.mien, ti = IDX.tinh, bi = IDX.brand,
+        moi = IDX.model, si = IDX.shop;
+
+  const out = [];
+  for (let i = 0; i < ROWS.length; i++) {
+    const r = ROWS[i];
+    if (dFrom && r[di] < dFrom) continue;
+    if (dTo && r[di] > dTo) continue;
+    if (mienSet && !mienSet.has(r[mi])) continue;
+    if (tinhSet && !tinhSet.has(r[ti])) continue;
+    if (brandSet && !brandSet.has(r[bi])) continue;
+    if (modelSet && !modelSet.has(r[moi])) continue;
+    if (shopSet && !shopSet.has(r[si])) continue;
+    out.push(r);
+  }
+  return out;
+}
+
+function getActiveFilterCount() {
+  let n = 0;
+  if (filterState.dateFrom || filterState.dateTo) n++;
+  if (filterState.mien.size) n++;
+  if (filterState.tinh.size) n++;
+  if (filterState.brand.size) n++;
+  if (filterState.model.size) n++;
+  if (filterState.shop.size) n++;
+  return n;
+}
+
+// ====== AGGREGATION HELPERS ======
+function aggBy(rows, key, sortDesc=true) {
+  const idx = IDX[key];
+  const map = new Map();
+  const Ri = IDX.R, Yi = IDX.Y;
+  for (const r of rows) {
+    const k = r[idx];
+    if (!map.has(k)) map.set(k, [0, 0]);
+    const v = map.get(k);
+    v[0] += r[Ri]; v[1] += r[Yi];
+  }
+  const out = [];
+  map.forEach((v, k) => out.push({key: k, R: v[0], Y: v[1], total: v[0]+v[1]}));
+  if (sortDesc) out.sort((a,b) => b.total - a.total);
+  return out;
+}
+
+function aggByDate(rows) {
+  const map = new Map();
+  const di = IDX.date, Ri = IDX.R, Yi = IDX.Y;
+  for (const r of rows) {
+    const k = r[di];
+    if (!map.has(k)) map.set(k, [0, 0]);
+    const v = map.get(k);
+    v[0] += r[Ri]; v[1] += r[Yi];
+  }
+  const out = [];
+  map.forEach((v, k) => out.push({date: k, R: v[0], Y: v[1]}));
+  out.sort((a,b) => a.date < b.date ? -1 : 1);
+  return out;
+}
+
+function aggByMonth(rows) {
+  const map = new Map();
+  const di = IDX.date, Ri = IDX.R, Yi = IDX.Y;
+  for (const r of rows) {
+    const k = r[di].slice(0, 7);
+    if (!map.has(k)) map.set(k, [0, 0]);
+    const v = map.get(k);
+    v[0] += r[Ri]; v[1] += r[Yi];
+  }
+  const out = [];
+  map.forEach((v, k) => out.push({month: k, R: v[0], Y: v[1]}));
+  out.sort((a,b) => a.month < b.month ? -1 : 1);
+  return out;
+}
+
+function aggByWeek(rows) {
+  // Year-Week ISO format
+  const map = new Map();
+  const di = IDX.date, Ri = IDX.R, Yi = IDX.Y;
+  for (const r of rows) {
+    const d = new Date(r[di]);
+    const wk = isoWeek(d);
+    const k = `${d.getFullYear()}-W${String(wk).padStart(2,'0')}`;
+    if (!map.has(k)) map.set(k, [0,0]);
+    const v = map.get(k);
+    v[0] += r[Ri]; v[1] += r[Yi];
+  }
+  const out = [];
+  map.forEach((v, k) => out.push({week: k, R: v[0], Y: v[1]}));
+  out.sort((a,b) => a.week < b.week ? -1 : 1);
+  return out;
+}
+
+function isoWeek(d) {
+  const target = new Date(d);
+  target.setHours(0,0,0,0);
+  target.setDate(target.getDate() + 3 - ((target.getDay() + 6) % 7));
+  const firstThursday = new Date(target.getFullYear(), 0, 4);
+  const diff = (target - firstThursday)/86400000;
+  return 1 + Math.round(diff / 7);
+}
+
+function aggByWeekday(rows) {
+  // Use sum and count for mean
+  const map = new Map(); // wd -> [Rsum, Ysum, dates_set]
+  const di = IDX.date, Ri = IDX.R, Yi = IDX.Y;
+  for (const r of rows) {
+    const d = new Date(r[di]);
+    const wd = WD_NAMES[d.getDay()];
+    if (!map.has(wd)) map.set(wd, [0,0, new Set()]);
+    const v = map.get(wd);
+    v[0] += r[Ri]; v[1] += r[Yi];
+    v[2].add(r[di]);
+  }
+  return WD_ORDER.map(wd => {
+    const v = map.get(wd);
+    if (!v) return {wd, R_sum:0, Y_sum:0, R_mean:0, Y_mean:0, n_days:0};
+    const n = v[2].size;
+    return {wd, R_sum: v[0], Y_sum: v[1], R_mean: n? v[0]/n : 0, Y_mean: n? v[1]/n : 0, n_days: n};
+  });
+}
+
+// ====== CHART STORE ======
+const CHARTS = {};
+function makeOrUpdate(id, config) {
+  if (CHARTS[id]) {
+    CHARTS[id].destroy();
+  }
+  const el = document.getElementById(id);
+  if (!el) return;
+  CHARTS[id] = new Chart(el, config);
+}
+
+// ====== TABLE HELPERS ======
+function renderTable(containerId, columns, rows, opts={}) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  if (!rows.length) { c.innerHTML = '<div class="no-data">Không có dữ liệu khớp filter</div>'; return; }
+  const max = opts.max || 1000;
+  const scroll = opts.scroll !== false && rows.length > 12;
+  let html = (scroll ? '<div class="tbl-scroll">' : '') + '<table><thead><tr>';
+  columns.forEach(col => {
+    html += `<th class="${col.align==='right'?'right':col.align==='center'?'center':''}">${col.label}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  rows.slice(0, max).forEach(r => {
+    html += '<tr>';
+    columns.forEach(col => {
+      const v = col.render(r);
+      html += `<td class="${col.align==='right'?'right':col.align==='center'?'center':''}">${v}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>' + (scroll ? '</div>' : '');
+  c.innerHTML = html;
+}
+
+// ====== REBUILD ALL ======
+function rebuildAll() {
+  const filtered = applyFilter();
+  const hasFilter = getActiveFilterCount() > 0;
+
+  // Update filter info
+  document.getElementById('filter-count').textContent =
+    `${getActiveFilterCount()} đang áp dụng`;
+  const sumR = filtered.reduce((a,r) => a + r[IDX.R], 0);
+  const sumY = filtered.reduce((a,r) => a + r[IDX.Y], 0);
+  document.getElementById('filter-info').innerHTML =
+    `<span class="hl">${filtered.length.toLocaleString('vi-VN')}</span> dòng dữ liệu khớp / `+
+    `<span class="hl">${ROWS.length.toLocaleString('vi-VN')}</span> tổng. ` +
+    `Doanh số R+Y khớp filter: <span class="hl">${fmt(sumR+sumY)}</span> ` +
+    `(R=${fmt(sumR)}, Y=${fmt(sumY)})`;
+
+  // KPIs: when no filter, prefer accurate grand total; with filter, use leaf
+  let kR, kY;
+  if (hasFilter) {
+    kR = sumR; kY = sumY;
+    document.getElementById('title-note-1').textContent = '(theo dữ liệu khớp filter - leaf level)';
+  } else {
+    kR = DATA.grand.R; kY = DATA.grand.Y;
+    document.getElementById('title-note-1').textContent = '(toàn bộ — số chính xác từ pivot totals)';
+  }
+  const kTot = kR + kY;
+  document.getElementById('kpi-R').textContent = fmt(kR);
+  document.getElementById('kpi-Y').textContent = fmt(kY);
+  document.getElementById('kpi-tot').textContent = fmt(kTot);
+  document.getElementById('kpi-gap').textContent = fmt(Math.abs(kY - kR));
+  document.getElementById('kpi-R-pct').textContent = kTot ? fmtPct(kR/kTot) : '—';
+  document.getElementById('kpi-Y-pct').textContent = kTot ? fmtPct(kY/kTot) : '—';
+  document.getElementById('kpi-tot-sub').textContent = hasFilter ?
+    `${filtered.length.toLocaleString('vi-VN')} dòng chi tiết` : `${ROWS.length.toLocaleString('vi-VN')} dòng chi tiết`;
+  document.getElementById('kpi-gap-sub').textContent = kR > kY ? 'R đang dẫn trước' :
+    (kY > kR ? 'Y đang dẫn trước' : 'Cân bằng');
+
+  // Coverage warning
+  const w = document.getElementById('warn-coverage');
+  if (!hasFilter && DATA.stats.coverage_R < 0.95) {
+    w.style.display = 'block';
+    w.innerHTML = `<strong>Lưu ý:</strong> Dữ liệu chi tiết (leaf) chỉ phủ ` +
+      `<strong>${(DATA.stats.coverage_R*100).toFixed(1)}%</strong> tổng doanh số R và ` +
+      `<strong>${(DATA.stats.coverage_Y*100).toFixed(1)}%</strong> tổng Y (do file Excel bị truncation). ` +
+      `Khi áp dụng filter, các con số sẽ tính từ data chi tiết → tổng sẽ thấp hơn grand total. ` +
+      `Để filter chính xác 100%, hãy export lại file Excel với phân kỳ nhỏ hơn (theo từng tháng).`;
+  } else {
+    w.style.display = 'none';
+  }
+
+  // Quick read
+  document.getElementById('quick-read').innerHTML = kTot ?
+    (`Trong phạm vi đang xem, R chiếm <strong>${fmtPct(kR/kTot)}</strong> ` +
+     `(${fmt(kR)}), Y chiếm <strong>${fmtPct(kY/kTot)}</strong> (${fmt(kY)}). ` +
+     `${kR>kY?'R đang dẫn':'Y đang dẫn'} với chênh lệch <strong>${fmt(Math.abs(kY-kR))}</strong>.`)
+    : 'Không có dữ liệu khớp filter.';
+
+  // Pie chart
+  makeOrUpdate('c-pie', {
+    type:'doughnut',
+    data:{labels:['R','Y'], datasets:[{data:[kR,kY], backgroundColor:[COLOR_R,COLOR_Y], borderWidth:0}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'55%',
+      plugins:{legend:{position:'bottom'},
+        tooltip:{callbacks:{label: ctx => `${ctx.label}: ${fmt(ctx.parsed)} (${kTot?fmtPct(ctx.parsed/kTot):'—'})`}}}
+    }
+  });
+
+  // ===== 2.1 Monthly =====
+  let monthly;
+  if (!hasFilter) {
+    monthly = DATA.monthly.map(m => ({month:m.month, R:m.R, Y:m.Y}));
+  } else {
+    monthly = aggByMonth(filtered);
+  }
+  makeOrUpdate('c-month-bar', {
+    type:'bar',
+    data:{labels: monthly.map(m=>m.month),
+      datasets:[
+        {label:'R', data: monthly.map(m=>m.R), backgroundColor:COLOR_R},
+        {label:'Y', data: monthly.map(m=>m.Y), backgroundColor:COLOR_Y}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Doanh số theo Tháng'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}}}}
+  });
+  makeOrUpdate('c-month-share', {
+    type:'bar',
+    data:{labels: monthly.map(m=>m.month),
+      datasets:[
+        {label:'R %', data: monthly.map(m=>{const t=m.R+m.Y; return t?m.R/t*100:0;}), backgroundColor:COLOR_R, stack:'s'},
+        {label:'Y %', data: monthly.map(m=>{const t=m.R+m.Y; return t?m.Y/t*100:0;}), backgroundColor:COLOR_Y, stack:'s'}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{title:{display:true, text:'Thị phần (%) theo Tháng'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1).replace('.',',')}%`}}},
+      scales:{x:{stacked:true, max:100, ticks:{callback:v=>v+'%'}}, y:{stacked:true}}}
+  });
+  renderTable('t-month',
+    [
+      {label:'Tháng', render:r=>`<strong>${r.month}</strong>`},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.R+r.Y)}</strong>`},
+      {label:'Thị phần R', align:'right', render:r=>{const t=r.R+r.Y;return t?fmtPct(r.R/t):'—';}},
+      {label:'Thị phần Y', align:'right', render:r=>{const t=r.R+r.Y;return t?fmtPct(r.Y/t):'—';}}
+    ], monthly);
+
+  // ===== 2.2 Weekly =====
+  let weekly;
+  if (!hasFilter) {
+    weekly = DATA.weekly.map(w => ({week:w.week.split('-')[1].startsWith('W')?w.week:('W'+w.week.split('-')[1]), R:w.R, Y:w.Y, _raw:w.week}));
+    weekly = weekly.map(w => ({week:w._raw.startsWith('20')?`W${w._raw.split('-')[1]}`:w._raw, R:w.R, Y:w.Y}));
+  } else {
+    weekly = aggByWeek(filtered).map(w=>({week: 'W' + w.week.split('-W')[1], R:w.R, Y:w.Y}));
+  }
+  makeOrUpdate('c-week-bar', {
+    type:'bar',
+    data:{labels: weekly.map(w=>w.week),
+      datasets:[
+        {label:'R', data: weekly.map(w=>w.R), backgroundColor:COLOR_R},
+        {label:'Y', data: weekly.map(w=>w.Y), backgroundColor:COLOR_Y}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Doanh số theo Tuần'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}}}}
+  });
+  makeOrUpdate('c-week-share', {
+    type:'line',
+    data:{labels: weekly.map(w=>w.week),
+      datasets:[
+        {label:'Thị phần R (%)', data:weekly.map(w=>{const t=w.R+w.Y; return t?w.R/t*100:0;}),
+          borderColor:COLOR_R, backgroundColor:COLOR_R_T, tension:.3, fill:true, pointRadius:4},
+        {label:'Thị phần Y (%)', data:weekly.map(w=>{const t=w.R+w.Y; return t?w.Y/t*100:0;}),
+          borderColor:COLOR_Y, backgroundColor:COLOR_Y_T, tension:.3, fill:false, pointRadius:4}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Xu hướng thị phần theo Tuần'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1).replace('.',',')}%`}}},
+      scales:{y:{min:20, max:80, ticks:{callback:v=>v+'%'}}}}
+  });
+  renderTable('t-week',
+    [
+      {label:'Tuần', render:r=>`<strong>${r.week}</strong>`},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.R+r.Y)}</strong>`},
+      {label:'Thị phần R', align:'right', render:r=>{const t=r.R+r.Y;return t?fmtPct(r.R/t):'—';}}
+    ], weekly);
+
+  // ===== 2.3 Daily =====
+  const daily = aggByDate(filtered);
+  const dayLabels = daily.map(d => d.date.slice(5));
+  makeOrUpdate('c-day-line', {
+    type:'line',
+    data:{labels: dayLabels,
+      datasets:[
+        {label:'R', data:daily.map(d=>d.R), borderColor:COLOR_R, backgroundColor:COLOR_R_T, tension:.25, pointRadius:2, fill:true},
+        {label:'Y', data:daily.map(d=>d.Y), borderColor:COLOR_Y, backgroundColor:COLOR_Y_T, tension:.25, pointRadius:2, fill:true}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Doanh số theo Ngày'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}}, x:{ticks:{maxRotation:75, minRotation:55, font:{size:9}}}}}
+  });
+  makeOrUpdate('c-day-share', {
+    type:'line',
+    data:{labels: dayLabels,
+      datasets:[
+        {label:'Thị phần R (%)', data:daily.map(d=>{const t=d.R+d.Y; return t?d.R/t*100:0;}),
+          borderColor:COLOR_R, tension:.3, pointRadius:2, fill:false}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Xu hướng thị phần R theo Ngày'}, legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>`Thị phần R: ${ctx.parsed.y.toFixed(1).replace('.',',')}%`}}},
+      scales:{y:{ticks:{callback:v=>v+'%'}}, x:{ticks:{maxRotation:75, minRotation:55, font:{size:9}}}}}
+  });
+
+  // ===== 2.4 Weekday =====
+  const wd = aggByWeekday(filtered);
+  makeOrUpdate('c-wd-bar', {
+    type:'bar',
+    data:{labels: wd.map(w=>w.wd),
+      datasets:[
+        {label:'R TB/ngày', data:wd.map(w=>w.R_mean), backgroundColor:COLOR_R},
+        {label:'Y TB/ngày', data:wd.map(w=>w.Y_mean), backgroundColor:COLOR_Y}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Doanh số TB mỗi ngày theo Thứ'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}}}}
+  });
+  makeOrUpdate('c-wd-share', {
+    type:'line',
+    data:{labels: wd.map(w=>w.wd),
+      datasets:[{label:'Thị phần R', data: wd.map(w=>{const t=w.R_sum+w.Y_sum;return t?w.R_sum/t*100:0;}),
+        borderColor:COLOR_R, backgroundColor:COLOR_R_T, tension:.3, fill:true, pointRadius:5}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},
+        title:{display:true, text:'Thị phần R (%) theo Thứ'},
+        tooltip:{callbacks:{label:ctx=>`R: ${ctx.parsed.y.toFixed(1).replace('.',',')}%`}}},
+      scales:{y:{ticks:{callback:v=>v+'%'}}}}
+  });
+  renderTable('t-wd',
+    [
+      {label:'Thứ', render:r=>`<strong>${r.wd}</strong>`},
+      {label:'Số ngày', align:'right', render:r=>r.n_days},
+      {label:'R (tổng)', align:'right', render:r=>fmtN(r.R_sum)},
+      {label:'Y (tổng)', align:'right', render:r=>fmtN(r.Y_sum)},
+      {label:'R TB/ngày', align:'right', render:r=>fmtN(r.R_mean)},
+      {label:'Y TB/ngày', align:'right', render:r=>fmtN(r.Y_mean)},
+      {label:'Thị phần R', align:'right', render:r=>{const t=r.R_sum+r.Y_sum;return t?fmtPct(r.R_sum/t):'—';}}
+    ], wd);
+
+  // ===== 3. Model group =====
+  let mg;
+  if (!hasFilter) {
+    mg = DATA.subtotals.model_group.map(m=>({key: DICT.model.indexOf(m.model), model:m.model, R:m.R, Y:m.Y, total:m.R+m.Y}))
+      .filter(m=>m.total>0).sort((a,b)=>b.total-a.total);
+  } else {
+    mg = aggBy(filtered, 'model').map(g => ({...g, model: DICT.model[g.key]}));
+  }
+  makeOrUpdate('c-mg-bar', {
+    type:'bar',
+    data:{labels: mg.map(m=>m.model),
+      datasets:[
+        {label:'R', data: mg.map(m=>m.R), backgroundColor:COLOR_R},
+        {label:'Y', data: mg.map(m=>m.Y), backgroundColor:COLOR_Y}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{title:{display:true, text:'Doanh số theo Nhóm sản phẩm'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`}}},
+      scales:{x:{ticks:{callback:v=>fmt(v)}}}}
+  });
+  makeOrUpdate('c-mg-share', {
+    type:'bar',
+    data:{labels: mg.map(m=>m.model),
+      datasets:[
+        {label:'R %', data: mg.map(m=>{const t=m.R+m.Y;return t?m.R/t*100:0;}), backgroundColor:COLOR_R, stack:'s'},
+        {label:'Y %', data: mg.map(m=>{const t=m.R+m.Y;return t?m.Y/t*100:0;}), backgroundColor:COLOR_Y, stack:'s'}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{title:{display:true, text:'Thị phần (%) theo Nhóm'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1).replace('.',',')}%`}}},
+      scales:{x:{stacked:true, max:100, ticks:{callback:v=>v+'%'}}, y:{stacked:true}}}
+  });
+  renderTable('t-mg',
+    [
+      {label:'Nhóm', render:r=>`<span class="brand-cell">${r.model}</span>`},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.R+r.Y)}</strong>`},
+      {label:'Thị phần R', align:'right', render:r=>{const t=r.R+r.Y;return t?fmtPct(r.R/t):'—';}},
+      {label:'Bên thắng', align:'center', render:r=>{
+        const t=r.R+r.Y; if(!t) return '—';
+        const s=r.R/t;
+        if (s>0.55) return '<span class="tag tag-win">R</span>';
+        if (s<0.45) return '<span class="tag tag-lose">Y</span>';
+        return '<span class="tag tag-bal">Cân bằng</span>';
+      }}
+    ], mg);
+
+  // ===== 4. Brand =====
+  let brand;
+  if (!hasFilter) {
+    brand = DATA.subtotals.brand.map(b=>({brand:b.brand, R:b.R, Y:b.Y, total:b.R+b.Y}))
+      .filter(b=>b.total>0).sort((a,b)=>b.total-a.total);
+  } else {
+    brand = aggBy(filtered, 'brand').map(b => ({...b, brand: DICT.brand[b.key]})).filter(b=>b.total>0);
+  }
+  const brandTop = brand.slice(0, 20);
+  makeOrUpdate('c-brand-bar', {
+    type:'bar',
+    data:{labels: brandTop.map(b=>b.brand),
+      datasets:[
+        {label:'R', data: brandTop.map(b=>b.R), backgroundColor:COLOR_R, stack:'s'},
+        {label:'Y', data: brandTop.map(b=>b.Y), backgroundColor:COLOR_Y, stack:'s'}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{title:{display:true, text:'Top thương hiệu - R vs Y (xếp chồng)'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`}}},
+      scales:{x:{stacked:true, ticks:{callback:v=>fmt(v)}}, y:{stacked:true}}}
+  });
+  const totBrand = brand.reduce((a,b)=>a+b.total,0);
+  renderTable('t-brand',
+    [
+      {label:'#', render:(r,i)=>i+1},
+      {label:'Thương hiệu', render:r=>`<span class="brand-cell">${r.brand}</span>`},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.total)}</strong>`},
+      {label:'% TT', align:'right', render:r=>totBrand?fmtPct(r.total/totBrand):'—'},
+      {label:'Thị phần R', align:'right', render:r=>r.total?fmtPct(r.R/r.total):'—'},
+      {label:'Sở hữu', align:'center', render:r=>{
+        if (r.R===0) return '<span class="tag tag-lose">Y độc quyền</span>';
+        if (r.Y===0) return '<span class="tag tag-win">R độc quyền</span>';
+        const s=r.R/r.total;
+        if (s>0.6) return '<span class="tag tag-win">R mạnh</span>';
+        if (s<0.4) return '<span class="tag tag-lose">Y mạnh</span>';
+        return '<span class="tag tag-bal">Cân bằng</span>';
+      }}
+    ], brand.map((b,i)=>({...b,_i:i})));
+
+  // ===== 5. Top products =====
+  // Aggregate by product (key = product index, but include brand+model for display)
+  const prodMap = new Map();
+  const pi = IDX.product, bi = IDX.brand, mi_ = IDX.model;
+  for (const r of filtered) {
+    const k = r[pi];
+    if (!prodMap.has(k)) prodMap.set(k, {key:k, brand:r[bi], model:r[mi_], R:0, Y:0});
+    const v = prodMap.get(k);
+    v.R += r[IDX.R]; v.Y += r[IDX.Y];
+  }
+  const products = [...prodMap.values()].map(p => ({...p, total: p.R+p.Y}))
+    .filter(p => p.total > 0)
+    .sort((a,b) => b.total - a.total).slice(0, 30);
+  renderTable('t-product',
+    [
+      {label:'#', render:(r,i)=>i+1},
+      {label:'Thương hiệu', render:r=>`<span class="brand-cell">${DICT.brand[r.brand]}</span>`},
+      {label:'Model', render:r=>DICT.model[r.model]},
+      {label:'Tên sản phẩm', render:r=>DICT.product[r.key]},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.total)}</strong>`},
+      {label:'Thị phần R', align:'right', render:r=>r.total?fmtPct(r.R/r.total):'—'}
+    ], products);
+
+  // ===== 6. Mien / Tinh =====
+  let mien;
+  if (!hasFilter) {
+    mien = DATA.subtotals.mien.map(m=>({mien:m.mien, R:m.R, Y:m.Y, total:m.R+m.Y}))
+      .filter(m=>m.total>0);
+  } else {
+    mien = aggBy(filtered, 'mien').map(m=>({...m, mien: DICT.mien[m.key]}));
+  }
+  makeOrUpdate('c-mien-bar', {
+    type:'bar',
+    data:{labels: mien.map(m=>m.mien),
+      datasets:[
+        {label:'R', data: mien.map(m=>m.R), backgroundColor:COLOR_R},
+        {label:'Y', data: mien.map(m=>m.Y), backgroundColor:COLOR_Y}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{title:{display:true, text:'Doanh số theo Miền'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},
+      scales:{y:{ticks:{callback:v=>fmt(v)}}}}
+  });
+  makeOrUpdate('c-mien-share', {
+    type:'bar',
+    data:{labels: mien.map(m=>m.mien),
+      datasets:[
+        {label:'R %', data: mien.map(m=>{const t=m.R+m.Y;return t?m.R/t*100:0;}), backgroundColor:COLOR_R, stack:'s'},
+        {label:'Y %', data: mien.map(m=>{const t=m.R+m.Y;return t?m.Y/t*100:0;}), backgroundColor:COLOR_Y, stack:'s'}
+      ]},
+    options:{responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{title:{display:true, text:'Thị phần (%) theo Miền'},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1).replace('.',',')}%`}}},
+      scales:{x:{stacked:true, max:100, ticks:{callback:v=>v+'%'}}, y:{stacked:true}}}
+  });
+  renderTable('t-mien',
+    [
+      {label:'Miền', render:r=>`<strong>${r.mien}</strong>`},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.R+r.Y)}</strong>`},
+      {label:'Thị phần R', align:'right', render:r=>{const t=r.R+r.Y;return t?fmtPct(r.R/t):'—';}}
+    ], mien);
+
+  // Tinh
+  let tinh;
+  if (!hasFilter) {
+    tinh = DATA.subtotals.tinh.map(t=>({mien:t.mien, tinh:t.tinh, R:t.R, Y:t.Y, total:t.R+t.Y}))
+      .filter(t=>t.total>0).sort((a,b)=>b.total-a.total).slice(0,20);
+  } else {
+    // Aggregate by tinh
+    const tMap = new Map();
+    const ti = IDX.tinh, mi_ = IDX.mien;
+    for (const r of filtered) {
+      const k = r[ti];
+      if (!tMap.has(k)) tMap.set(k, {key:k, mien_idx: r[mi_], R:0, Y:0});
+      const v = tMap.get(k);
+      v.R += r[IDX.R]; v.Y += r[IDX.Y];
+    }
+    tinh = [...tMap.values()].map(t=>({mien: DICT.mien[t.mien_idx], tinh:DICT.tinh[t.key], R:t.R, Y:t.Y, total: t.R+t.Y}))
+      .filter(t=>t.total>0).sort((a,b)=>b.total-a.total).slice(0,20);
+  }
+  renderTable('t-tinh',
+    [
+      {label:'#', render:(r,i)=>i+1},
+      {label:'Tỉnh thành', render:r=>`<span class="brand-cell">${r.tinh}</span>`},
+      {label:'Miền', render:r=>r.mien},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.total)}</strong>`},
+      {label:'Thị phần', render:r=>{const sR=r.R/r.total*100, sY=100-sR;
+        return `<div class="share-bar"><div class="R" style="width:${sR}%">${sR.toFixed(0)}%</div><div class="Y" style="width:${sY}%">${sY.toFixed(0)}%</div></div>`;
+      }},
+      {label:'Bên thắng', align:'center', render:r=>{const s=r.R/r.total;
+        if (s>0.55) return '<span class="tag tag-win">R</span>';
+        if (s<0.45) return '<span class="tag tag-lose">Y</span>';
+        return '<span class="tag tag-bal">Cân bằng</span>';
+      }}
+    ], tinh);
+
+  // ===== 7. Shop =====
+  const shMap = new Map();
+  const si = IDX.shop, ti2 = IDX.tinh, mi2 = IDX.mien;
+  for (const r of filtered) {
+    const k = r[si];
+    if (!shMap.has(k)) shMap.set(k, {key:k, mien_idx:r[mi2], tinh_idx:r[ti2], R:0, Y:0});
+    const v = shMap.get(k);
+    v.R += r[IDX.R]; v.Y += r[IDX.Y];
+  }
+  const shops = [...shMap.values()].map(s=>({mien:DICT.mien[s.mien_idx], tinh:DICT.tinh[s.tinh_idx], shop:DICT.shop[s.key], R:s.R, Y:s.Y, total:s.R+s.Y}))
+    .filter(s=>s.total>0).sort((a,b)=>b.total-a.total).slice(0,30);
+  renderTable('t-shop',
+    [
+      {label:'#', render:(r,i)=>i+1},
+      {label:'Shop', render:r=>`<span class="brand-cell">${r.shop}</span>`},
+      {label:'Tỉnh', render:r=>r.tinh},
+      {label:'Miền', render:r=>r.mien},
+      {label:'R', align:'right', render:r=>fmtN(r.R)},
+      {label:'Y', align:'right', render:r=>fmtN(r.Y)},
+      {label:'Tổng', align:'right', render:r=>`<strong>${fmtN(r.total)}</strong>`},
+      {label:'Thuộc bên', align:'center', render:r=>{
+        if (r.R===0) return '<span class="tag tag-lose">Y</span>';
+        if (r.Y===0) return '<span class="tag tag-win">R</span>';
+        return '<span class="tag tag-bal">Cả 2</span>';
+      }}
+    ], shops);
+
+  // ===== 8. Kenh =====
+  const kMap = new Map();
+  const hi = IDX.hinhthuc;
+  for (const r of filtered) {
+    const k = r[hi];
+    if (!kMap.has(k)) kMap.set(k, {key:k, R:0, Y:0});
+    const v = kMap.get(k);
+    v.R += r[IDX.R]; v.Y += r[IDX.Y];
+  }
+  const kenhArr = [...kMap.values()];
+  const kenhR = kenhArr.filter(k=>k.R>0).map(k=>({kenh:DICT.hinhthuc[k.key], doanhso:k.R}))
+    .sort((a,b)=>b.doanhso-a.doanhso).slice(0,8);
+  const kenhY = kenhArr.filter(k=>k.Y>0).map(k=>({kenh:DICT.hinhthuc[k.key], doanhso:k.Y}))
+    .sort((a,b)=>b.doanhso-a.doanhso).slice(0,8);
+  const paletteR = ['#1e3a8a','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#7c3aed','#a78bfa','#c4b5fd'];
+  const paletteY = ['#f59e0b','#fbbf24','#fcd34d','#fde68a','#fb923c','#f97316','#ea580c','#c2410c'];
+  makeOrUpdate('c-kenh-R', {
+    type:'doughnut',
+    data:{labels: kenhR.map(k=>k.kenh),
+      datasets:[{data: kenhR.map(k=>k.doanhso), backgroundColor:paletteR.slice(0,kenhR.length), borderWidth:0}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'45%',
+      plugins:{legend:{position:'right', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}}}
+  });
+  makeOrUpdate('c-kenh-Y', {
+    type:'doughnut',
+    data:{labels: kenhY.map(k=>k.kenh),
+      datasets:[{data: kenhY.map(k=>k.doanhso), backgroundColor:paletteY.slice(0,kenhY.length), borderWidth:0}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'45%',
+      plugins:{legend:{position:'right', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}}}
+  });
+  const totKR = kenhR.reduce((a,b)=>a+b.doanhso,0);
+  const totKY = kenhY.reduce((a,b)=>a+b.doanhso,0);
+  let htmlK = '<table><thead><tr><th>Bên</th><th>Hình thức xuất</th><th class="right">Doanh số</th><th class="right">% Trong bên</th></tr></thead><tbody>';
+  kenhR.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-win">R</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKR?fmtPct(k.doanhso/totKR):'—'}</td></tr>`;});
+  kenhY.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-lose">Y</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKY?fmtPct(k.doanhso/totKY):'—'}</td></tr>`;});
+  htmlK += '</tbody></table>';
+  document.getElementById('t-kenh').innerHTML = htmlK;
+}
+
+// ====== INIT ======
+document.getElementById('meta-range').textContent =
+  `Khoảng thời gian: ${DATA.stats.date_min} → ${DATA.stats.date_max}`;
+document.getElementById('meta-files').textContent =
+  `Nguồn: ${DATA.source_files.length} file (${DATA.source_files.join(', ')})`;
+document.getElementById('meta-build').textContent =
+  `Cập nhật: ${DATA.build_time}`;
+document.getElementById('footer-build').textContent = DATA.build_time;
+
+rebuildAll();
+</script>
+</body>
+</html>
