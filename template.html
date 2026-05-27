@@ -31,6 +31,16 @@ header .meta { margin-top: 12px; display: flex; gap: 20px; flex-wrap: wrap; font
                    display: flex; align-items: center; justify-content: space-between; }
 .filter-panel h3 .badge { background: #1e3a8a; color: white; padding: 3px 10px;
                           border-radius: 12px; font-size: 11px; font-weight: 600; }
+.filter-panel h3 .right-tools { display: flex; gap: 8px; align-items: center; }
+.filter-toggle { background: white; border: 1px solid #1e3a8a; color: #1e3a8a;
+                 padding: 4px 12px; border-radius: 6px; cursor: pointer;
+                 font-size: 12px; font-weight: 600; font-family: inherit; }
+.filter-toggle:hover { background: #eff6ff; }
+.filter-panel.collapsed { padding: 10px 22px; }
+.filter-panel.collapsed h3 { margin-bottom: 0; }
+.filter-panel.collapsed .filter-grid,
+.filter-panel.collapsed .filter-actions,
+.filter-panel.collapsed .filter-info { display: none; }
 .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .filter-item { display: flex; flex-direction: column; gap: 4px; }
 .filter-item label { font-size: 11px; color: #6b7280; font-weight: 600;
@@ -158,7 +168,10 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
 <div class="filter-panel">
   <h3>
     <span>🔍 Bộ lọc</span>
-    <span class="badge" id="filter-count">0 đang áp dụng</span>
+    <span class="right-tools">
+      <span class="badge" id="filter-count">0 đang áp dụng</span>
+      <button class="filter-toggle" id="filter-toggle" title="Thu gọn/mở rộng bộ lọc">▲ Thu gọn</button>
+    </span>
   </h3>
   <div class="filter-grid">
     <div class="filter-item">
@@ -497,6 +510,27 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   filterState.brand.clear(); filterState.model.clear(); filterState.shop.clear();
   rebuildAll();
 });
+
+// Filter panel collapse toggle
+(function(){
+  const panel = document.querySelector('.filter-panel');
+  const btn = document.getElementById('filter-toggle');
+  if (!panel || !btn) return;
+  const STORAGE_KEY = 'reportFilterCollapsed';
+  // Restore previous state from sessionStorage
+  try {
+    if (sessionStorage.getItem(STORAGE_KEY) === '1') {
+      panel.classList.add('collapsed');
+      btn.textContent = '▼ Mở rộng';
+    }
+  } catch (e) {}
+  btn.addEventListener('click', () => {
+    panel.classList.toggle('collapsed');
+    const collapsed = panel.classList.contains('collapsed');
+    btn.textContent = collapsed ? '▼ Mở rộng' : '▲ Thu gọn';
+    try { sessionStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch (e) {}
+  });
+})();
 
 function applyFilter() {
   const fs = filterState;
