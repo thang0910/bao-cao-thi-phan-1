@@ -15,12 +15,16 @@ from pathlib import Path
 
 import pandas as pd
 
+from product_normalize import normalize_canonical, load_manual_mapping
+
 warnings.filterwarnings("ignore")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIRS = [SCRIPT_DIR / "data", SCRIPT_DIR]
 OUTPUT_HTML = SCRIPT_DIR / "index.html"
 TEMPLATE_HTML = SCRIPT_DIR / "template.html"
+MAPPING_FILE = SCRIPT_DIR / "product_mapping.xlsx"
+REVIEW_FILE = SCRIPT_DIR / "product_review.xlsx"
 
 DIMENSION_COLS = [
     "Nam_Thang", "Nam_Tuan", "Date", "Mien", "TinhThanh", "QuanHuyen", "TenShop",
@@ -163,6 +167,48 @@ def build_data_json(dfs_per_file):
     product_cats, product_idx = enc(leaf["TenSanPham"])
     hinh_cats, hinh_idx = enc(leaf["HinhThucXuat"])
 
+    # === Canonical product names: gom cac variant cua cung 1 SP ===
+    # Buoc 1: doc manual mapping (neu co)
+    manual_map = load_manual_mapping(MAPPING_FILE)
+
+    # Buoc 2: voi moi product, xac dinh brand chinh (brand co doanh so cao nhat cho product do)
+    prod_brand_map = {}
+    pb = leaf.groupby(["TenSanPham", "ThuongHieu"], as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum()
+    pb["_tot"] = pb["R_DoanhSo"] + pb["Y_DoanhSo"]
+    pb = pb.sort_values("_tot", ascending=False).drop_duplicates("TenSanPham")
+    for _, r in pb.iterrows():
+        prod_brand_map[str(r["TenSanPham"])] = str(r["ThuongHieu"])
+
+    # Buoc 3: tinh canonical cho moi product
+    product_to_canonical = {}  # product_name -> (key, display)
+    for pname in product_cats:
+        if pname in manual_map:
+            # Ten chuan do user dat
+            disp = manual_map[pname]
+            key = disp.upper().strip()
+            product_to_canonical[pname] = (key, disp)
+        else:
+            brand = prod_brand_map.get(pname, "")
+            key, disp = normalize_canonical(pname, brand)
+            product_to_canonical[pname] = (key, disp)
+
+    # Buoc 4: tao dict canonical (unique keys), va mapping product_idx -> canonical_idx
+    canonical_keys = sorted({v[0] for v in product_to_canonical.values() if v[0]})
+    canonical_key_to_idx = {k: i for i, k in enumerate(canonical_keys)}
+    # Display ten dep nhat cho moi key (chon display dau tien gap)
+    canonical_display = [""] * len(canonical_keys)
+    for pname, (key, disp) in product_to_canonical.items():
+        if not key:
+            continue
+        i = canonical_key_to_idx[key]
+        if not canonical_display[i]:
+            canonical_display[i] = disp
+    # product_idx -> canonical_idx (theo thu tu product_cats)
+    product_canonical_idx = []
+    for pname in product_cats:
+        key = product_to_canonical.get(pname, ("", ""))[0]
+        product_canonical_idx.append(canonical_key_to_idx.get(key, -1))
+
     L = leaf.copy()
     L["Ni"] = L["NganhHang"].fillna("").astype(str).map(nganh_idx)
     L["Mi"] = L["Mien"].fillna("").astype(str).map(mien_idx)
@@ -220,7 +266,9 @@ def build_data_json(dfs_per_file):
             "nganhhang": nganh_cats,
             "mien": mien_cats, "tinh": tinh_cats, "quan": quan_cats, "shop": shop_cats,
             "brand": brand_cats, "model": model_cats, "product": product_cats, "hinhthuc": hinh_cats,
+            "product_canonical": canonical_display,
         },
+        "product_to_canonical": product_canonical_idx,
         "rows": rows,
         "row_schema": ["date", "nganhhang", "mien", "tinh", "quan", "shop",
                        "brand", "model", "product", "hinhthuc", "R", "Y"],
@@ -247,6 +295,44 @@ def render_html(payload):
     return html.replace("__DATA_PLACEHOLDER__", data_str)
 
 
+def export_product_review(payload, all_df):
+    """Xuat file product_review.xlsx de user kiem tra/sua mapping."""
+    try:
+        product_cats = payload["dict"]["product"]
+        canonical_disp = payload["dict"]["product_canonical"]
+        product_to_can = payload["product_to_canonical"]
+
+        leaf = all_df[all_df["_level"] == 12]
+        prod_sales = leaf.groupby("TenSanPham", as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum()
+        sales_map = {str(r["TenSanPham"]): (float(r["R_DoanhSo"]), float(r["Y_DoanhSo"]))
+                     for _, r in prod_sales.iterrows()}
+
+        rows = []
+        for i, pname in enumerate(product_cats):
+            ci = product_to_can[i]
+            cname = canonical_disp[ci] if 0 <= ci < len(canonical_disp) else ""
+            r_sale, y_sale = sales_map.get(pname, (0, 0))
+            rows.append({
+                "original": pname,
+                "canonical_auto": cname,
+                "canonical_override": "",
+                "R_doanhso": r_sale,
+                "Y_doanhso": y_sale,
+                "total": r_sale + y_sale,
+            })
+
+        df_review = pd.DataFrame(rows)
+        cnt = df_review.groupby("canonical_auto").size().to_dict()
+        df_review["n_variants"] = df_review["canonical_auto"].map(cnt)
+        df_review = df_review.sort_values(["canonical_auto", "total"], ascending=[True, False])
+        df_review = df_review[["canonical_auto", "n_variants", "original",
+                               "canonical_override", "R_doanhso", "Y_doanhso", "total"]]
+        df_review.to_excel(REVIEW_FILE, index=False)
+        print(f"  Xuat file review: {REVIEW_FILE.name} ({len(df_review)} dong, {len(cnt)} nhom canonical)")
+    except Exception as e:
+        print(f"  WARN: Khong xuat duoc product_review.xlsx: {e}")
+
+
 def main():
     print("Build Report - R (CellphoneS) vs Y (MWG) - Multi-category")
     files = find_excel_files()
@@ -267,7 +353,6 @@ def main():
     print("\nTong hop...")
     payload = build_data_json(dfs_per_file)
     s = payload["stats"]
-    s = payload["stats"]
     print(f"  Nganh hang: {payload['categories']}")
     print(f"  Thoi gian (leaf): {s['date_min']} -> {s['date_max']}")
     print(f"  So dong chi tiet: {s['n_leaf_rows']:,}")
@@ -275,6 +360,12 @@ def main():
     print(f"  Grand Y: {payload['grand']['Y']:,.0f}")
     print(f"  Coverage R: {s['coverage_R'] * 100:.1f}%")
     print(f"  Coverage Y: {s['coverage_Y'] * 100:.1f}%")
+    n_prod = len(payload["dict"]["product"])
+    n_canon = len(payload["dict"]["product_canonical"])
+    print(f"  San pham: {n_prod} ten goc -> {n_canon} nhom canonical (gom {n_prod-n_canon} bien the)")
+
+    all_df = pd.concat([df for df, _ in dfs_per_file], ignore_index=True)
+    export_product_review(payload, all_df)
 
     html = render_html(payload)
     OUTPUT_HTML.write_text(html, encoding="utf-8")
