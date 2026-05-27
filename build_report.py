@@ -13,9 +13,11 @@ import warnings
 from datetime import datetime
 from pathlib import Path
 
+import io
 import pandas as pd
 
 from product_normalize import normalize_canonical, load_manual_mapping
+from vn_region import lookup_mien
 
 warnings.filterwarnings("ignore")
 
@@ -26,10 +28,18 @@ TEMPLATE_HTML = SCRIPT_DIR / "template.html"
 MAPPING_FILE = SCRIPT_DIR / "product_mapping.xlsx"
 REVIEW_FILE = SCRIPT_DIR / "product_review.xlsx"
 
-DIMENSION_COLS = [
+# Format day du (16 cot, co Mien va Quan Huyen)
+DIMENSION_COLS_FULL = [
     "Nam_Thang", "Nam_Tuan", "Date", "Mien", "TinhThanh", "QuanHuyen", "TenShop",
     "NganhHang", "ThuongHieu", "Model", "TenSanPham", "HinhThucXuat",
 ]
+# Format goi (14 cot, KHONG co Mien va Quan Huyen - tu suy ra)
+DIMENSION_COLS_COMPACT = [
+    "Nam_Thang", "Nam_Tuan", "Date", "TinhThanh", "TenShop",
+    "NganhHang", "ThuongHieu", "Model", "TenSanPham", "HinhThucXuat",
+]
+# DIMENSION_COLS standard sau normalize (luon co Mien, QuanHuyen)
+DIMENSION_COLS = DIMENSION_COLS_FULL
 
 
 def find_excel_files():
@@ -48,16 +58,53 @@ def find_excel_files():
     return files
 
 
+def _read_xlsx_safe(path):
+    """Doc xlsx, strip trailing null bytes neu co (de fix file MWG export bi padding)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    end_marker = b"PK\x05\x06"
+    pos = data.rfind(end_marker)
+    if pos > 0:
+        comment_len = int.from_bytes(data[pos + 20:pos + 22], "little")
+        truncate_at = pos + 22 + comment_len
+        if truncate_at < len(data):
+            data = data[:truncate_at]
+    return io.BytesIO(data)
+
+
 def read_one_file(path):
     print(f"  Doc: {path.name}")
-    df = pd.read_excel(path, sheet_name=0, header=[0, 1])
-    if df.shape[1] != 16:
-        raise ValueError(f"File {path.name} co {df.shape[1]} cot, ky vong 16.")
-    df.columns = DIMENSION_COLS + ["R_DoanhSo", "R_Pct", "Y_DoanhSo", "Y_Pct"]
+    df = pd.read_excel(_read_xlsx_safe(path), sheet_name=0, header=[0, 1])
+    n_cols = df.shape[1]
+
+    if n_cols == 16:
+        # Format day du
+        df.columns = DIMENSION_COLS_FULL + ["R_DoanhSo", "R_Pct", "Y_DoanhSo", "Y_Pct"]
+        print(f"    Format: 16 cot (full)")
+    elif n_cols == 14:
+        # Format goi: thieu Mien va QuanHuyen
+        df.columns = DIMENSION_COLS_COMPACT + ["R_DoanhSo", "R_Pct", "Y_DoanhSo", "Y_Pct"]
+        # Suy ra Mien tu TinhThanh
+        df.insert(3, "Mien", df["TinhThanh"].map(lambda t: lookup_mien(t) if isinstance(t, str) else None))
+        # Them QuanHuyen placeholder
+        # - "(N/A)" khi TenShop co gia tri thuc (leaf-level rows)
+        # - "Total" khi TenShop = Total (subtotal rows) -> de level numbering khop format full
+        df.insert(5, "QuanHuyen", "Total")
+        mask_shop_real = df["TenShop"].notna() & (df["TenShop"].astype(str) != "Total")
+        df.loc[mask_shop_real, "QuanHuyen"] = "(N/A)"
+        # Cho subtotal rows (TinhThanh = 'Total'), set Mien = 'Total'
+        df.loc[df["TinhThanh"] == "Total", "Mien"] = "Total"
+        # Cac tinh khong tim duoc mien -> 'Mien khac'
+        mask_unknown = df["TinhThanh"].notna() & (df["TinhThanh"] != "Total") & df["Mien"].isna()
+        df.loc[mask_unknown, "Mien"] = "Mien khac"
+        print(f"    Format: 14 cot (compact) - tu suy Mien tu Tinh thanh")
+    else:
+        raise ValueError(f"File {path.name} co {n_cols} cot, ky vong 14 hoac 16.")
+
     df = df[~df["Nam_Thang"].astype(str).str.startswith("Applied filters", na=False)]
     df = df[~df["Nam_Thang"].astype(str).str.startswith("Exported", na=False)]
     is_leaf = pd.DataFrame(
-        {f: (df[f].notna() & (df[f].astype(str) != "Total")) for f in DIMENSION_COLS}
+        {f: (df[f].notna() & (df[f].astype(str) != "Total")) for f in DIMENSION_COLS_FULL}
     )
     cum = is_leaf.astype(int).cumprod(axis=1)
     df["_level"] = cum.sum(axis=1)
@@ -152,6 +199,10 @@ def build_data_json(dfs_per_file):
     modelgroup_sub = sub_group(all_df, 10, "Model")
     tinh_sub = sub_group(all_df, 5, ["Mien", "TinhThanh"])
     mien_sub = sub_group(all_df, 4, "Mien")
+    # Fallback: voi compact format khong co level 4 (Mien subtotal),
+    # tu derive tu level 5 (Tinh subtotal) bang cach gop theo Mien
+    if mien_sub.empty and not tinh_sub.empty:
+        mien_sub = tinh_sub.groupby("Mien", as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum()
 
     def enc(series):
         cats = sorted(series.fillna("").astype(str).unique().tolist())
