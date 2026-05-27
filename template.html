@@ -701,9 +701,28 @@ function renderTable(containerId, columns, rows, opts={}) {
   c.innerHTML = html;
 }
 
+// Detect if only category filter is active (other filters empty)
+function isCategoryOnlyMode() {
+  return filterState.nganh.size > 0 &&
+    !filterState.dateFrom && !filterState.dateTo &&
+    filterState.mien.size === 0 && filterState.tinh.size === 0 &&
+    filterState.brand.size === 0 && filterState.model.size === 0 &&
+    filterState.shop.size === 0;
+}
+
+// Sum accurate category subtotals for selected categories
+function getAccurateCategoryTotals(catNames) {
+  let R = 0, Y = 0;
+  (DATA.subtotals.category || []).forEach(c => {
+    if (catNames.includes(c.category)) { R += c.R; Y += c.Y; }
+  });
+  return {R, Y};
+}
+
 function rebuildAll() {
   const filtered = applyFilter();
   const hasFilter = getActiveFilterCount() > 0;
+  const catOnly = isCategoryOnlyMode();
 
   document.getElementById('filter-count').textContent = `${getActiveFilterCount()} đang áp dụng`;
   const sumR = filtered.reduce((a,r) => a + r[IDX.R], 0);
@@ -711,17 +730,23 @@ function rebuildAll() {
   document.getElementById('filter-info').innerHTML =
     `<span class="hl">${filtered.length.toLocaleString('vi-VN')}</span> dòng dữ liệu khớp / `+
     `<span class="hl">${ROWS.length.toLocaleString('vi-VN')}</span> tổng. ` +
-    `Doanh số R+Y khớp filter: <span class="hl">${fmt(sumR+sumY)}</span> ` +
+    `Doanh số R+Y khớp filter (leaf): <span class="hl">${fmt(sumR+sumY)}</span> ` +
     `(R=${fmt(sumR)}, Y=${fmt(sumY)})`;
 
-  let kR, kY;
-  if (hasFilter) {
+  let kR, kY, kNote;
+  if (catOnly) {
+    // Use accurate per-category subtotals
+    const acc = getAccurateCategoryTotals([...filterState.nganh]);
+    kR = acc.R; kY = acc.Y;
+    kNote = `(số chính xác từ subtotal cho ngành: ${[...filterState.nganh].join(', ')})`;
+  } else if (hasFilter) {
     kR = sumR; kY = sumY;
-    document.getElementById('title-note-1').textContent = '(theo dữ liệu khớp filter)';
+    kNote = '(theo dữ liệu chi tiết khớp filter - leaf level)';
   } else {
     kR = DATA.grand.R; kY = DATA.grand.Y;
-    document.getElementById('title-note-1').textContent = '(toàn bộ - số chính xác từ subtotal)';
+    kNote = '(toàn bộ - số chính xác từ subtotal)';
   }
+  document.getElementById('title-note-1').textContent = kNote;
   const kTot = kR + kY;
   document.getElementById('kpi-R').textContent = fmt(kR);
   document.getElementById('kpi-Y').textContent = fmt(kY);
@@ -735,12 +760,25 @@ function rebuildAll() {
     (kY > kR ? 'Y đang dẫn trước' : 'Cân bằng');
 
   const w = document.getElementById('warn-coverage');
-  if (!hasFilter && DATA.stats.coverage_R < 0.95) {
+  if (catOnly) {
+    w.style.display = 'block';
+    const accTot = kR + kY;
+    const leafTot = sumR + sumY;
+    const cov = accTot ? leafTot/accTot : 0;
+    w.innerHTML = `<strong>Đang lọc theo ngành ${[...filterState.nganh].join(', ')}:</strong> ` +
+      `KPI và biểu đồ tháng/tuần dùng <strong>số chính xác</strong> từ pivot subtotal (${fmt(accTot)}). ` +
+      `Còn các biểu đồ chi tiết theo ngày/thương hiệu/shop dùng data leaf (${fmt(leafTot)}, ` +
+      `~${(cov*100).toFixed(0)}% do file Excel bị truncation khi export).`;
+  } else if (!hasFilter && DATA.stats.coverage_R < 0.95) {
     w.style.display = 'block';
     w.innerHTML = `<strong>Lưu ý:</strong> Dữ liệu chi tiết (leaf) chỉ phủ ` +
       `<strong>${(DATA.stats.coverage_R*100).toFixed(1)}%</strong> tổng doanh số R và ` +
       `<strong>${(DATA.stats.coverage_Y*100).toFixed(1)}%</strong> tổng Y. ` +
-      `Khi áp filter, số tính từ data chi tiết → tổng sẽ thấp hơn grand total.`;
+      `Khi áp filter kết hợp (ví dụ tỉnh + thương hiệu), số tính từ data chi tiết → tổng sẽ thấp hơn grand total.`;
+  } else if (hasFilter) {
+    w.style.display = 'block';
+    w.innerHTML = `<strong>Lưu ý:</strong> Filter kết hợp đang dùng dữ liệu chi tiết (leaf level), ` +
+      `chỉ phủ ~${(DATA.stats.coverage_R*100).toFixed(0)}% doanh số thực. Tổng có thể thấp hơn thực tế.`;
   } else { w.style.display = 'none'; }
 
   document.getElementById('quick-read').innerHTML = kTot ?
@@ -836,6 +874,16 @@ function rebuildAll() {
   let monthly;
   if (!hasFilter && DATA.monthly && DATA.monthly.length) {
     monthly = DATA.monthly.map(m => ({month:m.month, R:m.R, Y:m.Y}));
+  } else if (catOnly && DATA.monthly_by_category && DATA.monthly_by_category.length) {
+    // Use accurate per-category monthly subtotals
+    const selectedCats = [...filterState.nganh];
+    const mMap = new Map();
+    DATA.monthly_by_category.forEach(x => {
+      if (!selectedCats.includes(x.category)) return;
+      if (!mMap.has(x.month)) mMap.set(x.month, {month: x.month, R:0, Y:0});
+      const v = mMap.get(x.month); v.R += x.R; v.Y += x.Y;
+    });
+    monthly = [...mMap.values()].sort((a,b)=>a.month<b.month?-1:1);
   } else {
     monthly = aggByMonth(filtered);
   }
@@ -876,6 +924,15 @@ function rebuildAll() {
   let weekly;
   if (!hasFilter && DATA.weekly && DATA.weekly.length) {
     weekly = DATA.weekly.map(w => ({week: ('W'+w.week.split('-')[1]), R:w.R, Y:w.Y}));
+  } else if (catOnly && DATA.weekly_by_category && DATA.weekly_by_category.length) {
+    const selectedCats = [...filterState.nganh];
+    const wMap = new Map();
+    DATA.weekly_by_category.forEach(x => {
+      if (!selectedCats.includes(x.category)) return;
+      if (!wMap.has(x.week)) wMap.set(x.week, {week: 'W'+x.week.split('-')[1], R:0, Y:0, _raw: x.week});
+      const v = wMap.get(x.week); v.R += x.R; v.Y += x.Y;
+    });
+    weekly = [...wMap.values()].sort((a,b)=>a._raw<b._raw?-1:1);
   } else {
     weekly = aggByWeek(filtered).map(w=>({week: 'W' + w.week.split('-W')[1], R:w.R, Y:w.Y}));
   }
@@ -1183,50 +1240,4 @@ function rebuildAll() {
   }
   const kenhArr = [...kMap.values()];
   const kenhR = kenhArr.filter(k=>k.R>0).map(k=>({kenh:DICT.hinhthuc[k.key], doanhso:k.R}))
-    .sort((a,b)=>b.doanhso-a.doanhso).slice(0,8);
-  const kenhY = kenhArr.filter(k=>k.Y>0).map(k=>({kenh:DICT.hinhthuc[k.key], doanhso:k.Y}))
-    .sort((a,b)=>b.doanhso-a.doanhso).slice(0,8);
-  const paletteR = ['#1e3a8a','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#7c3aed','#a78bfa','#c4b5fd'];
-  const paletteY = ['#f59e0b','#fbbf24','#fcd34d','#fde68a','#fb923c','#f97316','#ea580c','#c2410c'];
-  makeOrUpdate('c-kenh-R', {
-    type:'doughnut',
-    data:{labels: kenhR.map(k=>k.kenh),
-      datasets:[{data: kenhR.map(k=>k.doanhso), backgroundColor:paletteR.slice(0,kenhR.length), borderWidth:0}]},
-    options:{responsive:true, maintainAspectRatio:false, cutout:'45%',
-      plugins:{legend:{position:'right', labels:{font:{size:10}, boxWidth:10}},
-        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}}}
-  });
-  makeOrUpdate('c-kenh-Y', {
-    type:'doughnut',
-    data:{labels: kenhY.map(k=>k.kenh),
-      datasets:[{data: kenhY.map(k=>k.doanhso), backgroundColor:paletteY.slice(0,kenhY.length), borderWidth:0}]},
-    options:{responsive:true, maintainAspectRatio:false, cutout:'45%',
-      plugins:{legend:{position:'right', labels:{font:{size:10}, boxWidth:10}},
-        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}}}
-  });
-  const totKR = kenhR.reduce((a,b)=>a+b.doanhso,0);
-  const totKY = kenhY.reduce((a,b)=>a+b.doanhso,0);
-  let htmlK = '<table><thead><tr><th>Bên</th><th>Hình thức xuất</th><th class="right">Doanh số</th><th class="right">% Trong bên</th></tr></thead><tbody>';
-  kenhR.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-win">R</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKR?fmtPct(k.doanhso/totKR):'—'}</td></tr>`;});
-  kenhY.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-lose">Y</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKY?fmtPct(k.doanhso/totKY):'—'}</td></tr>`;});
-  htmlK += '</tbody></table>';
-  document.getElementById('t-kenh').innerHTML = htmlK;
-}
-
-document.getElementById('meta-range').textContent =
-  `Khoảng thời gian: ${DATA.stats.date_min} → ${DATA.stats.date_max}`;
-document.getElementById('meta-files').textContent =
-  `Nguồn: ${DATA.source_files.length} file`;
-document.getElementById('meta-cats').textContent =
-  `Ngành hàng: ${(DATA.categories||[]).join(', ') || 'N/A'}`;
-document.getElementById('meta-build').textContent =
-  `Cập nhật: ${DATA.build_time}`;
-document.getElementById('footer-build').textContent = DATA.build_time;
-document.getElementById('header-categories').textContent =
-  (DATA.categories||[]).length === 1 ? `Ngành ${DATA.categories[0]}` :
-  (DATA.categories||[]).length > 1 ? `${DATA.categories.length} ngành hàng` : 'Đa ngành hàng';
-
-rebuildAll();
-</script>
-</body>
-</html>
+    .sort((a
