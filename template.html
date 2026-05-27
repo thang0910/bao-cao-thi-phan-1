@@ -1240,4 +1240,50 @@ function rebuildAll() {
   }
   const kenhArr = [...kMap.values()];
   const kenhR = kenhArr.filter(k=>k.R>0).map(k=>({kenh:DICT.hinhthuc[k.key], doanhso:k.R}))
-    .sort((a
+    .sort((a,b)=>b.doanhso-a.doanhso).slice(0,8);
+  const kenhY = kenhArr.filter(k=>k.Y>0).map(k=>({kenh:DICT.hinhthuc[k.key], doanhso:k.Y}))
+    .sort((a,b)=>b.doanhso-a.doanhso).slice(0,8);
+  const paletteR = ['#1e3a8a','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#7c3aed','#a78bfa','#c4b5fd'];
+  const paletteY = ['#f59e0b','#fbbf24','#fcd34d','#fde68a','#fb923c','#f97316','#ea580c','#c2410c'];
+  makeOrUpdate('c-kenh-R', {
+    type:'doughnut',
+    data:{labels: kenhR.map(k=>k.kenh),
+      datasets:[{data: kenhR.map(k=>k.doanhso), backgroundColor:paletteR.slice(0,kenhR.length), borderWidth:0}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'45%',
+      plugins:{legend:{position:'right', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}}}
+  });
+  makeOrUpdate('c-kenh-Y', {
+    type:'doughnut',
+    data:{labels: kenhY.map(k=>k.kenh),
+      datasets:[{data: kenhY.map(k=>k.doanhso), backgroundColor:paletteY.slice(0,kenhY.length), borderWidth:0}]},
+    options:{responsive:true, maintainAspectRatio:false, cutout:'45%',
+      plugins:{legend:{position:'right', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}}}
+  });
+  const totKR = kenhR.reduce((a,b)=>a+b.doanhso,0);
+  const totKY = kenhY.reduce((a,b)=>a+b.doanhso,0);
+  let htmlK = '<table><thead><tr><th>Bên</th><th>Hình thức xuất</th><th class="right">Doanh số</th><th class="right">% Trong bên</th></tr></thead><tbody>';
+  kenhR.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-win">R</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKR?fmtPct(k.doanhso/totKR):'—'}</td></tr>`;});
+  kenhY.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-lose">Y</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKY?fmtPct(k.doanhso/totKY):'—'}</td></tr>`;});
+  htmlK += '</tbody></table>';
+  document.getElementById('t-kenh').innerHTML = htmlK;
+}
+
+document.getElementById('meta-range').textContent =
+  `Khoảng thời gian: ${DATA.stats.date_min} → ${DATA.stats.date_max}`;
+document.getElementById('meta-files').textContent =
+  `Nguồn: ${DATA.source_files.length} file`;
+document.getElementById('meta-cats').textContent =
+  `Ngành hàng: ${(DATA.categories||[]).join(', ') || 'N/A'}`;
+document.getElementById('meta-build').textContent =
+  `Cập nhật: ${DATA.build_time}`;
+document.getElementById('footer-build').textContent = DATA.build_time;
+document.getElementById('header-categories').textContent =
+  (DATA.categories||[]).length === 1 ? `Ngành ${DATA.categories[0]}` :
+  (DATA.categories||[]).length > 1 ? `${DATA.categories.length} ngành hàng` : 'Đa ngành hàng';
+
+rebuildAll();
+</script>
+</body>
+</html>
