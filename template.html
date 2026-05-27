@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Báo cáo Thị phần R (CellphoneS) vs Y (MWG)</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
@@ -149,6 +150,42 @@ table tr:hover { background: #fafbfc; }
 
 footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
 .no-data { text-align: center; padding: 40px 20px; color: #9ca3af; font-style: italic; }
+
+/* Pivot section */
+.pivot-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 14px;
+                  padding: 12px; background: #f9fafb; border-radius: 8px; }
+.pivot-controls .pc-item { display: flex; flex-direction: column; gap: 4px; }
+.pivot-controls label { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.pivot-controls select { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; min-width: 180px; font-family: inherit; }
+.pivot-controls button { padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.pivot-controls button:hover { background: #059669; }
+.pivot-info { font-size: 12px; color: #6b7280; padding: 4px 8px; }
+.pivot-wrap { overflow: auto; max-height: 700px; border: 1px solid #e5e7eb; border-radius: 8px; }
+.pivot-table { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
+.pivot-table th { background: #f3f4f6; color: #374151; text-align: center; padding: 8px 10px;
+                  border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;
+                  font-size: 11px; font-weight: 600; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
+.pivot-table th.grp-cps { background: #fee2e2; color: #991b1b; }
+.pivot-table th.grp-mwg { background: #fef3c7; color: #92400e; }
+.pivot-table th.grp-share { background: #d1fae5; color: #065f46; }
+.pivot-table th.dim-h { background: #e5e7eb; }
+.pivot-table th.sticky-left { position: sticky; left: 0; z-index: 11; background: #f3f4f6; }
+.pivot-table th.sticky-left2 { position: sticky; left: 120px; z-index: 11; background: #f3f4f6; }
+.pivot-table td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; border-right: 1px solid #f3f4f6;
+                  white-space: nowrap; text-align: right; }
+.pivot-table td.sticky-left { position: sticky; left: 0; background: white; z-index: 5;
+                              text-align: left; font-weight: 500; border-right: 1px solid #e5e7eb; }
+.pivot-table td.sticky-left2 { position: sticky; left: 120px; background: white; z-index: 5;
+                              text-align: left; border-right: 1px solid #e5e7eb; }
+.pivot-table tr.subtotal td { background: #dbeafe; font-weight: 700; }
+.pivot-table tr.subtotal td.sticky-left, .pivot-table tr.subtotal td.sticky-left2 { background: #dbeafe; }
+.pivot-table tr:hover td { background: #f9fafb; }
+.pivot-table tr:hover td.sticky-left, .pivot-table tr:hover td.sticky-left2 { background: #f9fafb; }
+.pivot-table tr.subtotal:hover td { background: #bfdbfe; }
+.pivot-grow-pos { color: #059669; font-weight: 600; }
+.pivot-grow-neg { color: #dc2626; font-weight: 600; }
+.pivot-grow-flat { color: #9ca3af; }
+.pivot-share { color: #1e3a8a; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -233,6 +270,7 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
     <li><a href="#diali">Theo Vùng / Tỉnh thành</a></li>
     <li><a href="#shop">Top Shop</a></li>
     <li><a href="#kenh">Theo Hình thức xuất</a></li>
+    <li><a href="#pivot">Pivot phân tích theo thời gian</a></li>
   </ol>
 </div>
 
@@ -357,6 +395,36 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
     </div>
   </div>
   <div id="t-kenh"></div>
+</section>
+
+<section class="section" id="pivot">
+  <h2><span class="num">10.</span>Pivot phân tích thị phần theo thời gian</h2>
+  <div class="sub">Phân tích chéo: trục dọc là dimension (thương hiệu/sản phẩm/nhóm/tỉnh), trục ngang là thời gian. Tự động tính tăng trưởng + thay đổi thị phần.</div>
+  <div class="pivot-controls">
+    <div class="pc-item">
+      <label>Trục dọc</label>
+      <select id="pv-row">
+        <option value="brand">Thương hiệu</option>
+        <option value="product">Sản phẩm (gom theo Brand)</option>
+        <option value="model">Nhóm sản phẩm</option>
+        <option value="tinh">Tỉnh thành (gom theo Miền)</option>
+      </select>
+    </div>
+    <div class="pc-item">
+      <label>Trục ngang</label>
+      <select id="pv-time">
+        <option value="month">Tháng</option>
+        <option value="week">Tuần</option>
+        <option value="quarter">Quý</option>
+      </select>
+    </div>
+    <div class="pc-item">
+      <label>&nbsp;</label>
+      <button id="pv-export">📥 Export Excel</button>
+    </div>
+    <div class="pivot-info" id="pv-info">—</div>
+  </div>
+  <div class="pivot-wrap"><div id="pivot-container"></div></div>
 </section>
 
 <footer>
@@ -1285,7 +1353,370 @@ function rebuildAll() {
   kenhY.forEach(k=>{ htmlK += `<tr><td><span class="tag tag-lose">Y</span></td><td>${k.kenh}</td><td class="right">${fmtN(k.doanhso)}</td><td class="right">${totKY?fmtPct(k.doanhso/totKY):'—'}</td></tr>`;});
   htmlK += '</tbody></table>';
   document.getElementById('t-kenh').innerHTML = htmlK;
+
+  // ===== 10. Pivot =====
+  buildPivot();
 }
+
+// ===== PIVOT FUNCTIONS =====
+function getPivotPeriod(dateStr, grain) {
+  if (grain === 'month') return dateStr.slice(0, 7);
+  if (grain === 'quarter') {
+    const m = parseInt(dateStr.slice(5, 7));
+    const q = Math.ceil(m / 3);
+    return dateStr.slice(0, 4) + '-Q' + q;
+  }
+  if (grain === 'week') {
+    const d = new Date(dateStr);
+    const wk = isoWeek(d);
+    return d.getFullYear() + '-W' + String(wk).padStart(2, '0');
+  }
+  return '';
+}
+
+function getPivotRowKey(r, dim) {
+  const P2C = DATA.product_to_canonical || [];
+  const CANON = (DATA.dict && DATA.dict.product_canonical) || [];
+  if (dim === 'brand') {
+    const n = DICT.brand[r[IDX.brand]] || '?';
+    return {parentKey: '', parentName: '', leafKey: 'b:' + r[IDX.brand], leafName: n};
+  }
+  if (dim === 'product') {
+    const ci = P2C[r[IDX.product]];
+    const cn = (ci != null && ci >= 0) ? (CANON[ci] || '?') : (DICT.product[r[IDX.product]] || '?');
+    const bn = DICT.brand[r[IDX.brand]] || '?';
+    return {parentKey: 'b:' + r[IDX.brand], parentName: bn, leafKey: 'p:' + ci, leafName: cn};
+  }
+  if (dim === 'model') {
+    const n = DICT.model[r[IDX.model]] || '?';
+    return {parentKey: '', parentName: '', leafKey: 'm:' + r[IDX.model], leafName: n};
+  }
+  if (dim === 'tinh') {
+    const tn = DICT.tinh[r[IDX.tinh]] || '?';
+    const mn = DICT.mien[r[IDX.mien]] || '?';
+    return {parentKey: 'mi:' + r[IDX.mien], parentName: mn, leafKey: 't:' + r[IDX.tinh], leafName: tn};
+  }
+  return {parentKey: '', parentName: '', leafKey: '?', leafName: '?'};
+}
+
+function buildPivot() {
+  const rowDim = document.getElementById('pv-row').value;
+  const timeGrain = document.getElementById('pv-time').value;
+  const filtered = applyFilter();
+
+  // Collect periods and group leaf data
+  const periodSet = new Set();
+  const grid = new Map(); // leafKey -> {parentKey, parentName, leafName, periods:{}, totalRY}
+  const Ri = IDX.R, Yi = IDX.Y, di = IDX.date;
+
+  for (const r of filtered) {
+    const period = getPivotPeriod(r[di], timeGrain);
+    if (!period) continue;
+    periodSet.add(period);
+    const k = getPivotRowKey(r, rowDim);
+    if (!grid.has(k.leafKey)) {
+      grid.set(k.leafKey, {parentKey: k.parentKey, parentName: k.parentName,
+                          leafName: k.leafName, periods: {}, totalR: 0, totalY: 0});
+    }
+    const g = grid.get(k.leafKey);
+    if (!g.periods[period]) g.periods[period] = {R: 0, Y: 0};
+    g.periods[period].R += r[Ri];
+    g.periods[period].Y += r[Yi];
+    g.totalR += r[Ri];
+    g.totalY += r[Yi];
+  }
+
+  const periods = [...periodSet].sort();
+  const rows = [...grid.values()];
+
+  // Sort by parent (alpha) then total (desc)
+  rows.sort((a, b) => {
+    if (a.parentName !== b.parentName) return a.parentName < b.parentName ? -1 : 1;
+    const ta = a.totalR + a.totalY;
+    const tb = b.totalR + b.totalY;
+    return tb - ta;
+  });
+
+  // Compute subtotals per parent
+  const subtotals = new Map(); // parentKey -> {parentName, periods, totalR, totalY}
+  if (rows.length && rows[0].parentKey) {
+    for (const r of rows) {
+      if (!subtotals.has(r.parentKey)) {
+        subtotals.set(r.parentKey, {parentKey: r.parentKey, parentName: r.parentName, periods: {}, totalR: 0, totalY: 0});
+      }
+      const s = subtotals.get(r.parentKey);
+      for (const p of periods) {
+        const v = r.periods[p];
+        if (!v) continue;
+        if (!s.periods[p]) s.periods[p] = {R: 0, Y: 0};
+        s.periods[p].R += v.R; s.periods[p].Y += v.Y;
+      }
+      s.totalR += r.totalR; s.totalY += r.totalY;
+    }
+  }
+
+  renderPivotTable(rowDim, timeGrain, periods, rows, subtotals);
+  document.getElementById('pv-info').innerHTML =
+    `<strong>${rows.length.toLocaleString('vi-VN')}</strong> dòng × <strong>${periods.length}</strong> kỳ. ` +
+    `Tổng R+Y: <strong>${fmt(rows.reduce((a,r)=>a+r.totalR+r.totalY,0))}</strong>`;
+}
+
+function pivotGrowthCell(first, last) {
+  if (!first || first === 0) return '<span class="pivot-grow-flat">—</span>';
+  const g = (last - first) / first * 100;
+  const cls = g > 0.5 ? 'pivot-grow-pos' : (g < -0.5 ? 'pivot-grow-neg' : 'pivot-grow-flat');
+  const sign = g > 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${g.toFixed(1).replace('.',',')}%</span>`;
+}
+
+function pivotShareCell(R, Y) {
+  const t = R + Y;
+  if (!t) return '<span class="pivot-grow-flat">—</span>';
+  return `<span class="pivot-share">${(R/t*100).toFixed(1).replace('.',',')}%</span>`;
+}
+
+function renderPivotTable(rowDim, timeGrain, periods, rows, subtotals) {
+  const c = document.getElementById('pivot-container');
+  if (!rows.length) {
+    c.innerHTML = '<div class="no-data">Không có dữ liệu khớp filter</div>';
+    return;
+  }
+  const hasParent = rows[0].parentKey ? true : false;
+  const dimLabel = {brand:'Thương hiệu', product:'Sản phẩm', model:'Nhóm sản phẩm', tinh:'Tỉnh thành'}[rowDim] || rowDim;
+  const parentLabel = {product:'Thương hiệu', tinh:'Miền'}[rowDim] || '';
+
+  // Header
+  let html = '<table class="pivot-table"><thead>';
+  // Row 1: group headers
+  html += '<tr>';
+  if (hasParent) html += `<th rowspan="2" class="sticky-left dim-h">${parentLabel}</th>`;
+  html += `<th rowspan="2" class="${hasParent?'sticky-left2':'sticky-left'} dim-h">${dimLabel}</th>`;
+  html += `<th colspan="${periods.length+1}" class="grp-cps">R (CellphoneS)</th>`;
+  html += `<th colspan="${periods.length+1}" class="grp-mwg">Y (MWG)</th>`;
+  html += `<th colspan="${periods.length+1}" class="grp-share">Thị phần R</th>`;
+  html += '</tr>';
+  // Row 2: periods + growth
+  html += '<tr>';
+  for (const p of periods) html += `<th class="grp-cps">${p}</th>`;
+  html += '<th class="grp-cps">Δ%</th>';
+  for (const p of periods) html += `<th class="grp-mwg">${p}</th>`;
+  html += '<th class="grp-mwg">Δ%</th>';
+  for (const p of periods) html += `<th class="grp-share">${p}</th>`;
+  html += '<th class="grp-share">+/-</th>';
+  html += '</tr></thead><tbody>';
+
+  // Build flat row list with subtotals interleaved
+  let currentParent = null;
+  const flatRows = [];
+  for (const r of rows) {
+    if (hasParent && r.parentKey !== currentParent) {
+      currentParent = r.parentKey;
+    }
+    flatRows.push({type: 'data', row: r});
+  }
+  // Insert subtotal after each parent group's rows
+  if (hasParent) {
+    const out = [];
+    let lastParent = null;
+    for (let i = 0; i < flatRows.length; i++) {
+      out.push(flatRows[i]);
+      const cur = flatRows[i].row.parentKey;
+      const next = i + 1 < flatRows.length ? flatRows[i+1].row.parentKey : null;
+      if (cur !== next) {
+        const s = subtotals.get(cur);
+        if (s) out.push({type: 'subtotal', row: s});
+      }
+    }
+    flatRows.length = 0;
+    flatRows.push(...out);
+  }
+
+  // Render rows
+  for (const item of flatRows) {
+    const r = item.row;
+    const isSub = item.type === 'subtotal';
+    html += `<tr class="${isSub?'subtotal':''}">`;
+    if (hasParent) {
+      html += `<td class="sticky-left">${isSub ? '<strong>'+r.parentName+'_TOTAL</strong>' : r.parentName}</td>`;
+      html += `<td class="sticky-left2">${isSub ? '' : r.leafName}</td>`;
+    } else {
+      html += `<td class="sticky-left">${r.leafName}</td>`;
+    }
+    // CPS columns
+    let firstR = null, lastR = null;
+    for (const p of periods) {
+      const v = r.periods[p];
+      const R = v ? v.R : 0;
+      html += `<td>${R ? fmtN(R) : '<span class="pivot-grow-flat">—</span>'}</td>`;
+      if (firstR === null && R) firstR = R;
+      if (R) lastR = R;
+    }
+    html += `<td>${pivotGrowthCell(firstR, lastR)}</td>`;
+    // MWG columns
+    let firstY = null, lastY = null;
+    for (const p of periods) {
+      const v = r.periods[p];
+      const Y = v ? v.Y : 0;
+      html += `<td>${Y ? fmtN(Y) : '<span class="pivot-grow-flat">—</span>'}</td>`;
+      if (firstY === null && Y) firstY = Y;
+      if (Y) lastY = Y;
+    }
+    html += `<td>${pivotGrowthCell(firstY, lastY)}</td>`;
+    // Share columns
+    let firstShare = null, lastShare = null;
+    for (const p of periods) {
+      const v = r.periods[p];
+      if (v && (v.R + v.Y) > 0) {
+        const sh = v.R / (v.R + v.Y);
+        if (firstShare === null) firstShare = sh;
+        lastShare = sh;
+        html += `<td>${pivotShareCell(v.R, v.Y)}</td>`;
+      } else {
+        html += `<td><span class="pivot-grow-flat">—</span></td>`;
+      }
+    }
+    // Share change
+    if (firstShare !== null && lastShare !== null) {
+      const d = (lastShare - firstShare) * 100;
+      const cls = d > 0.5 ? 'pivot-grow-pos' : (d < -0.5 ? 'pivot-grow-neg' : 'pivot-grow-flat');
+      const sign = d > 0 ? '+' : '';
+      html += `<td><span class="${cls}">${sign}${d.toFixed(2).replace('.',',')}pt</span></td>`;
+    } else {
+      html += `<td><span class="pivot-grow-flat">—</span></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  c.innerHTML = html;
+}
+
+function exportPivotExcel() {
+  if (typeof XLSX === 'undefined') {
+    alert('Thư viện XLSX chưa load. Vui lòng refresh trang và thử lại.');
+    return;
+  }
+  const rowDim = document.getElementById('pv-row').value;
+  const timeGrain = document.getElementById('pv-time').value;
+  const filtered = applyFilter();
+  const periodSet = new Set();
+  const grid = new Map();
+  const Ri = IDX.R, Yi = IDX.Y, di = IDX.date;
+  for (const r of filtered) {
+    const period = getPivotPeriod(r[di], timeGrain);
+    if (!period) continue;
+    periodSet.add(period);
+    const k = getPivotRowKey(r, rowDim);
+    if (!grid.has(k.leafKey)) {
+      grid.set(k.leafKey, {parentName: k.parentName, leafName: k.leafName, periods: {}, totalR:0, totalY:0});
+    }
+    const g = grid.get(k.leafKey);
+    if (!g.periods[period]) g.periods[period] = {R:0, Y:0};
+    g.periods[period].R += r[Ri]; g.periods[period].Y += r[Yi];
+    g.totalR += r[Ri]; g.totalY += r[Yi];
+  }
+  const periods = [...periodSet].sort();
+  const rows = [...grid.values()];
+  const hasParent = rows.length && rows[0].parentName;
+  rows.sort((a,b) => {
+    if (a.parentName !== b.parentName) return a.parentName < b.parentName ? -1 : 1;
+    return (b.totalR+b.totalY) - (a.totalR+a.totalY);
+  });
+
+  const aoa = [];
+  const dimLabel = {brand:'Thương hiệu', product:'Sản phẩm', model:'Nhóm sản phẩm', tinh:'Tỉnh thành'}[rowDim];
+  const parentLabel = {product:'Thương hiệu', tinh:'Miền'}[rowDim] || '';
+  // Header row 1
+  const h1 = [];
+  if (hasParent) h1.push(parentLabel);
+  h1.push(dimLabel);
+  for (const p of periods) h1.push('R '+p);
+  h1.push('R Tăng trưởng');
+  for (const p of periods) h1.push('Y '+p);
+  h1.push('Y Tăng trưởng');
+  for (const p of periods) h1.push('Thị phần R '+p);
+  h1.push('+/- Thị phần R');
+  aoa.push(h1);
+
+  // Data
+  const flatRows = [...rows];
+  if (hasParent) {
+    // Insert subtotals
+    const out = [];
+    const subMap = new Map();
+    for (const r of rows) {
+      if (!subMap.has(r.parentName)) subMap.set(r.parentName, {parentName:r.parentName, leafName:'_TOTAL', periods:{}, totalR:0, totalY:0});
+      const s = subMap.get(r.parentName);
+      for (const p of periods) {
+        const v = r.periods[p];
+        if (!v) continue;
+        if (!s.periods[p]) s.periods[p] = {R:0, Y:0};
+        s.periods[p].R += v.R; s.periods[p].Y += v.Y;
+      }
+      s.totalR += r.totalR; s.totalY += r.totalY;
+    }
+    let lastParent = null;
+    for (let i = 0; i < rows.length; i++) {
+      out.push(rows[i]);
+      const cur = rows[i].parentName;
+      const next = i+1 < rows.length ? rows[i+1].parentName : null;
+      if (cur !== next && subMap.has(cur)) {
+        const s = subMap.get(cur);
+        s.leafName = cur + '_TOTAL';
+        out.push(s);
+      }
+    }
+    flatRows.length = 0;
+    flatRows.push(...out);
+  }
+
+  for (const r of flatRows) {
+    const row = [];
+    if (hasParent) row.push(r.parentName);
+    row.push(r.leafName);
+    let firstR=null, lastR=null;
+    for (const p of periods) {
+      const v = r.periods[p];
+      const R = v ? v.R : 0;
+      row.push(R || 0);
+      if (firstR===null && R) firstR = R;
+      if (R) lastR = R;
+    }
+    row.push(firstR && lastR ? ((lastR-firstR)/firstR) : null);
+    let firstY=null, lastY=null;
+    for (const p of periods) {
+      const v = r.periods[p];
+      const Y = v ? v.Y : 0;
+      row.push(Y || 0);
+      if (firstY===null && Y) firstY = Y;
+      if (Y) lastY = Y;
+    }
+    row.push(firstY && lastY ? ((lastY-firstY)/firstY) : null);
+    let firstSh=null, lastSh=null;
+    for (const p of periods) {
+      const v = r.periods[p];
+      if (v && (v.R+v.Y)>0) {
+        const sh = v.R/(v.R+v.Y);
+        row.push(sh);
+        if (firstSh===null) firstSh = sh;
+        lastSh = sh;
+      } else {
+        row.push(null);
+      }
+    }
+    row.push(firstSh!==null && lastSh!==null ? (lastSh-firstSh) : null);
+    aoa.push(row);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Pivot');
+  const ts = new Date().toISOString().slice(0,16).replace(/[T:]/g,'-');
+  XLSX.writeFile(wb, `pivot_${rowDim}_${timeGrain}_${ts}.xlsx`);
+}
+
+document.getElementById('pv-row').addEventListener('change', buildPivot);
+document.getElementById('pv-time').addEventListener('change', buildPivot);
+document.getElementById('pv-export').addEventListener('click', exportPivotExcel);
 
 document.getElementById('meta-range').textContent =
   `Khoảng thời gian: ${DATA.stats.date_min} → ${DATA.stats.date_max}`;
