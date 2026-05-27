@@ -419,6 +419,20 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
       </select>
     </div>
     <div class="pc-item">
+      <label>Hiển thị</label>
+      <div style="display:flex; gap:10px; align-items:center; padding:7px 0; font-size:13px;">
+        <label style="text-transform:none; font-weight:500; cursor:pointer;">
+          <input type="checkbox" id="pv-show-r" checked> R
+        </label>
+        <label style="text-transform:none; font-weight:500; cursor:pointer;">
+          <input type="checkbox" id="pv-show-y" checked> Y
+        </label>
+        <label style="text-transform:none; font-weight:500; cursor:pointer;">
+          <input type="checkbox" id="pv-show-share" checked> Thị phần R
+        </label>
+      </div>
+    </div>
+    <div class="pc-item">
       <label>&nbsp;</label>
       <button id="pv-export">📥 Export Excel</button>
     </div>
@@ -1461,12 +1475,36 @@ function buildPivot() {
     `Tổng R+Y: <strong>${fmt(rows.reduce((a,r)=>a+r.totalR+r.totalY,0))}</strong>`;
 }
 
-function pivotGrowthCell(first, last) {
-  if (!first || first === 0) return '<span class="pivot-grow-flat">—</span>';
-  const g = (last - first) / first * 100;
+// Tinh tang truong dua tren 2 ky GAN NHAT co data
+function pivotGrowthCellLastTwo(values) {
+  // values: array of numbers theo thu tu thoi gian
+  // Tim 2 gia tri non-zero gan cuoi nhat
+  let last = null, prev = null;
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i]) {
+      if (last === null) last = values[i];
+      else { prev = values[i]; break; }
+    }
+  }
+  if (last === null || prev === null || prev === 0)
+    return '<span class="pivot-grow-flat">—</span>';
+  const g = (last - prev) / prev * 100;
   const cls = g > 0.5 ? 'pivot-grow-pos' : (g < -0.5 ? 'pivot-grow-neg' : 'pivot-grow-flat');
   const sign = g > 0 ? '+' : '';
   return `<span class="${cls}">${sign}${g.toFixed(1).replace('.',',')}%</span>`;
+}
+
+// Tra ve raw value cua last-vs-prev growth (de export Excel)
+function pivotGrowthValueLastTwo(values) {
+  let last = null, prev = null;
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i]) {
+      if (last === null) last = values[i];
+      else { prev = values[i]; break; }
+    }
+  }
+  if (last === null || prev === null || prev === 0) return null;
+  return (last - prev) / prev;
 }
 
 function pivotShareCell(R, Y) {
@@ -1481,50 +1519,54 @@ function renderPivotTable(rowDim, timeGrain, periods, rows, subtotals) {
     c.innerHTML = '<div class="no-data">Không có dữ liệu khớp filter</div>';
     return;
   }
+  // Toggles
+  const showR = document.getElementById('pv-show-r').checked;
+  const showY = document.getElementById('pv-show-y').checked;
+  const showShare = document.getElementById('pv-show-share').checked;
+  if (!showR && !showY && !showShare) {
+    c.innerHTML = '<div class="no-data">Hãy bật ít nhất 1 nhóm cột (R / Y / Thị phần)</div>';
+    return;
+  }
   const hasParent = rows[0].parentKey ? true : false;
   const dimLabel = {brand:'Thương hiệu', product:'Sản phẩm', model:'Nhóm sản phẩm', tinh:'Tỉnh thành'}[rowDim] || rowDim;
   const parentLabel = {product:'Thương hiệu', tinh:'Miền'}[rowDim] || '';
 
-  // Header
   let html = '<table class="pivot-table"><thead>';
   // Row 1: group headers
   html += '<tr>';
   if (hasParent) html += `<th rowspan="2" class="sticky-left dim-h">${parentLabel}</th>`;
   html += `<th rowspan="2" class="${hasParent?'sticky-left2':'sticky-left'} dim-h">${dimLabel}</th>`;
-  html += `<th colspan="${periods.length+1}" class="grp-cps">R (CellphoneS)</th>`;
-  html += `<th colspan="${periods.length+1}" class="grp-mwg">Y (MWG)</th>`;
-  html += `<th colspan="${periods.length+1}" class="grp-share">Thị phần R</th>`;
+  if (showR) html += `<th colspan="${periods.length+1}" class="grp-cps">R (CellphoneS)</th>`;
+  if (showY) html += `<th colspan="${periods.length+1}" class="grp-mwg">Y (MWG)</th>`;
+  if (showShare) html += `<th colspan="${periods.length+1}" class="grp-share">Thị phần R</th>`;
   html += '</tr>';
-  // Row 2: periods + growth
+  // Row 2: period headers + growth
   html += '<tr>';
-  for (const p of periods) html += `<th class="grp-cps">${p}</th>`;
-  html += '<th class="grp-cps">Δ%</th>';
-  for (const p of periods) html += `<th class="grp-mwg">${p}</th>`;
-  html += '<th class="grp-mwg">Δ%</th>';
-  for (const p of periods) html += `<th class="grp-share">${p}</th>`;
-  html += '<th class="grp-share">+/-</th>';
+  if (showR) {
+    for (const p of periods) html += `<th class="grp-cps">${p}</th>`;
+    html += '<th class="grp-cps" title="Tăng trưởng kỳ cuối vs kỳ trước">Δ%</th>';
+  }
+  if (showY) {
+    for (const p of periods) html += `<th class="grp-mwg">${p}</th>`;
+    html += '<th class="grp-mwg" title="Tăng trưởng kỳ cuối vs kỳ trước">Δ%</th>';
+  }
+  if (showShare) {
+    for (const p of periods) html += `<th class="grp-share">${p}</th>`;
+    html += '<th class="grp-share" title="Thay đổi thị phần kỳ cuối vs kỳ trước">+/-</th>';
+  }
   html += '</tr></thead><tbody>';
 
   // Build flat row list with subtotals interleaved
-  let currentParent = null;
-  const flatRows = [];
-  for (const r of rows) {
-    if (hasParent && r.parentKey !== currentParent) {
-      currentParent = r.parentKey;
-    }
-    flatRows.push({type: 'data', row: r});
-  }
-  // Insert subtotal after each parent group's rows
+  const flatRows = rows.map(r => ({type:'data', row:r}));
   if (hasParent) {
     const out = [];
-    let lastParent = null;
     for (let i = 0; i < flatRows.length; i++) {
       out.push(flatRows[i]);
       const cur = flatRows[i].row.parentKey;
       const next = i + 1 < flatRows.length ? flatRows[i+1].row.parentKey : null;
       if (cur !== next) {
         const s = subtotals.get(cur);
-        if (s) out.push({type: 'subtotal', row: s});
+        if (s) out.push({type:'subtotal', row:s});
       }
     }
     flatRows.length = 0;
@@ -1542,47 +1584,54 @@ function renderPivotTable(rowDim, timeGrain, periods, rows, subtotals) {
     } else {
       html += `<td class="sticky-left">${r.leafName}</td>`;
     }
-    // CPS columns
-    let firstR = null, lastR = null;
-    for (const p of periods) {
+    // Pre-compute arrays of values per period (in order)
+    const arrR = periods.map(p => (r.periods[p] ? r.periods[p].R : 0));
+    const arrY = periods.map(p => (r.periods[p] ? r.periods[p].Y : 0));
+    const arrShare = periods.map(p => {
       const v = r.periods[p];
-      const R = v ? v.R : 0;
-      html += `<td>${R ? fmtN(R) : '<span class="pivot-grow-flat">—</span>'}</td>`;
-      if (firstR === null && R) firstR = R;
-      if (R) lastR = R;
+      if (!v || (v.R + v.Y) <= 0) return null;
+      return v.R / (v.R + v.Y);
+    });
+    // R columns
+    if (showR) {
+      for (const R of arrR) {
+        html += `<td>${R ? fmtN(R) : '<span class="pivot-grow-flat">—</span>'}</td>`;
+      }
+      html += `<td>${pivotGrowthCellLastTwo(arrR)}</td>`;
     }
-    html += `<td>${pivotGrowthCell(firstR, lastR)}</td>`;
-    // MWG columns
-    let firstY = null, lastY = null;
-    for (const p of periods) {
-      const v = r.periods[p];
-      const Y = v ? v.Y : 0;
-      html += `<td>${Y ? fmtN(Y) : '<span class="pivot-grow-flat">—</span>'}</td>`;
-      if (firstY === null && Y) firstY = Y;
-      if (Y) lastY = Y;
+    // Y columns
+    if (showY) {
+      for (const Y of arrY) {
+        html += `<td>${Y ? fmtN(Y) : '<span class="pivot-grow-flat">—</span>'}</td>`;
+      }
+      html += `<td>${pivotGrowthCellLastTwo(arrY)}</td>`;
     }
-    html += `<td>${pivotGrowthCell(firstY, lastY)}</td>`;
     // Share columns
-    let firstShare = null, lastShare = null;
-    for (const p of periods) {
-      const v = r.periods[p];
-      if (v && (v.R + v.Y) > 0) {
-        const sh = v.R / (v.R + v.Y);
-        if (firstShare === null) firstShare = sh;
-        lastShare = sh;
-        html += `<td>${pivotShareCell(v.R, v.Y)}</td>`;
+    if (showShare) {
+      for (let i = 0; i < periods.length; i++) {
+        const sh = arrShare[i];
+        if (sh === null) {
+          html += `<td><span class="pivot-grow-flat">—</span></td>`;
+        } else {
+          html += `<td><span class="pivot-share">${(sh*100).toFixed(1).replace('.',',')}%</span></td>`;
+        }
+      }
+      // Share change: last 2 non-null
+      let last = null, prev = null;
+      for (let i = arrShare.length - 1; i >= 0; i--) {
+        if (arrShare[i] !== null) {
+          if (last === null) last = arrShare[i];
+          else { prev = arrShare[i]; break; }
+        }
+      }
+      if (last !== null && prev !== null) {
+        const d = (last - prev) * 100;
+        const cls = d > 0.5 ? 'pivot-grow-pos' : (d < -0.5 ? 'pivot-grow-neg' : 'pivot-grow-flat');
+        const sign = d > 0 ? '+' : '';
+        html += `<td><span class="${cls}">${sign}${d.toFixed(2).replace('.',',')}pt</span></td>`;
       } else {
         html += `<td><span class="pivot-grow-flat">—</span></td>`;
       }
-    }
-    // Share change
-    if (firstShare !== null && lastShare !== null) {
-      const d = (lastShare - firstShare) * 100;
-      const cls = d > 0.5 ? 'pivot-grow-pos' : (d < -0.5 ? 'pivot-grow-neg' : 'pivot-grow-flat');
-      const sign = d > 0 ? '+' : '';
-      html += `<td><span class="${cls}">${sign}${d.toFixed(2).replace('.',',')}pt</span></td>`;
-    } else {
-      html += `<td><span class="pivot-grow-flat">—</span></td>`;
     }
     html += '</tr>';
   }
@@ -1597,6 +1646,11 @@ function exportPivotExcel() {
   }
   const rowDim = document.getElementById('pv-row').value;
   const timeGrain = document.getElementById('pv-time').value;
+  const showR = document.getElementById('pv-show-r').checked;
+  const showY = document.getElementById('pv-show-y').checked;
+  const showShare = document.getElementById('pv-show-share').checked;
+  if (!showR && !showY && !showShare) { alert('Hãy bật ít nhất 1 nhóm cột (R/Y/Thị phần) trước khi export.'); return; }
+
   const filtered = applyFilter();
   const periodSet = new Set();
   const grid = new Map();
@@ -1625,22 +1679,17 @@ function exportPivotExcel() {
   const aoa = [];
   const dimLabel = {brand:'Thương hiệu', product:'Sản phẩm', model:'Nhóm sản phẩm', tinh:'Tỉnh thành'}[rowDim];
   const parentLabel = {product:'Thương hiệu', tinh:'Miền'}[rowDim] || '';
-  // Header row 1
   const h1 = [];
   if (hasParent) h1.push(parentLabel);
   h1.push(dimLabel);
-  for (const p of periods) h1.push('R '+p);
-  h1.push('R Tăng trưởng');
-  for (const p of periods) h1.push('Y '+p);
-  h1.push('Y Tăng trưởng');
-  for (const p of periods) h1.push('Thị phần R '+p);
-  h1.push('+/- Thị phần R');
+  if (showR) { for (const p of periods) h1.push('R '+p); h1.push('R Δ% (kỳ cuối vs kỳ trước)'); }
+  if (showY) { for (const p of periods) h1.push('Y '+p); h1.push('Y Δ% (kỳ cuối vs kỳ trước)'); }
+  if (showShare) { for (const p of periods) h1.push('Thị phần R '+p); h1.push('+/- Thị phần R'); }
   aoa.push(h1);
 
-  // Data
+  // Build flat rows with subtotals
   const flatRows = [...rows];
   if (hasParent) {
-    // Insert subtotals
     const out = [];
     const subMap = new Map();
     for (const r of rows) {
@@ -1654,7 +1703,6 @@ function exportPivotExcel() {
       }
       s.totalR += r.totalR; s.totalY += r.totalY;
     }
-    let lastParent = null;
     for (let i = 0; i < rows.length; i++) {
       out.push(rows[i]);
       const cur = rows[i].parentName;
@@ -1669,41 +1717,42 @@ function exportPivotExcel() {
     flatRows.push(...out);
   }
 
+  function lastTwoGrowth(arr) {
+    let last = null, prev = null;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i]) {
+        if (last === null) last = arr[i];
+        else { prev = arr[i]; break; }
+      }
+    }
+    if (last === null || prev === null || prev === 0) return null;
+    return (last - prev) / prev;
+  }
+  function lastTwoShareDelta(arr) {
+    let last = null, prev = null;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i] !== null) {
+        if (last === null) last = arr[i];
+        else { prev = arr[i]; break; }
+      }
+    }
+    if (last === null || prev === null) return null;
+    return last - prev;
+  }
+
   for (const r of flatRows) {
     const row = [];
     if (hasParent) row.push(r.parentName);
     row.push(r.leafName);
-    let firstR=null, lastR=null;
-    for (const p of periods) {
-      const v = r.periods[p];
-      const R = v ? v.R : 0;
-      row.push(R || 0);
-      if (firstR===null && R) firstR = R;
-      if (R) lastR = R;
-    }
-    row.push(firstR && lastR ? ((lastR-firstR)/firstR) : null);
-    let firstY=null, lastY=null;
-    for (const p of periods) {
-      const v = r.periods[p];
-      const Y = v ? v.Y : 0;
-      row.push(Y || 0);
-      if (firstY===null && Y) firstY = Y;
-      if (Y) lastY = Y;
-    }
-    row.push(firstY && lastY ? ((lastY-firstY)/firstY) : null);
-    let firstSh=null, lastSh=null;
-    for (const p of periods) {
-      const v = r.periods[p];
-      if (v && (v.R+v.Y)>0) {
-        const sh = v.R/(v.R+v.Y);
-        row.push(sh);
-        if (firstSh===null) firstSh = sh;
-        lastSh = sh;
-      } else {
-        row.push(null);
-      }
-    }
-    row.push(firstSh!==null && lastSh!==null ? (lastSh-firstSh) : null);
+    const arrR = periods.map(p => (r.periods[p] ? r.periods[p].R : 0));
+    const arrY = periods.map(p => (r.periods[p] ? r.periods[p].Y : 0));
+    const arrSh = periods.map(p => {
+      const v = r.periods[p]; if (!v || (v.R+v.Y) <= 0) return null;
+      return v.R / (v.R + v.Y);
+    });
+    if (showR) { for (const R of arrR) row.push(R || 0); row.push(lastTwoGrowth(arrR)); }
+    if (showY) { for (const Y of arrY) row.push(Y || 0); row.push(lastTwoGrowth(arrY)); }
+    if (showShare) { for (const sh of arrSh) row.push(sh); row.push(lastTwoShareDelta(arrSh)); }
     aoa.push(row);
   }
 
@@ -1717,6 +1766,15 @@ function exportPivotExcel() {
 document.getElementById('pv-row').addEventListener('change', buildPivot);
 document.getElementById('pv-time').addEventListener('change', buildPivot);
 document.getElementById('pv-export').addEventListener('click', exportPivotExcel);
+document.getElementById('pv-export').addEventListener('click', exportPivotExcel);
+
+function rebindPivotShows() {
+  ['pv-show-r','pv-show-y','pv-show-share'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el._bound) { el.addEventListener('change', buildPivot); el._bound = true; }
+  });
+}
+rebindPivotShows();
 
 document.getElementById('meta-range').textContent =
   `Khoảng thời gian: ${DATA.stats.date_min} → ${DATA.stats.date_max}`;
