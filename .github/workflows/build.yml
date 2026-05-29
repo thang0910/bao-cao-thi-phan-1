@@ -40,6 +40,13 @@ jobs:
       - name: Build HTML report
         run: python build_report.py
 
+      - name: Encrypt with StatiCrypt
+        run: |
+          npm install -g staticrypt
+          staticrypt index.html -p "${{ secrets.REPORT_PASSWORD }}" --short -d encrypted
+          mv encrypted/index.html index.html
+          echo "Encrypted index.html generated"
+
       - name: Show output
         run: |
           echo "Generated files:"
