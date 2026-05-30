@@ -18,6 +18,7 @@ import pandas as pd
 
 from product_normalize import normalize_canonical, load_manual_mapping
 from vn_region import lookup_mien
+import geo5km
 
 warnings.filterwarnings("ignore")
 
@@ -416,6 +417,14 @@ def main():
     print(f"  San pham: {n_prod} ten goc -> {n_canon} nhom canonical (gom {n_prod-n_canon} bien the)")
 
     all_df = pd.concat([df for df, _ in dfs_per_file], ignore_index=True)
+
+    # Section 5km: thi phan CPS vs MWG theo ban kinh dia ly
+    try:
+        payload["geo5km"] = geo5km.build_geo5km(all_df, len(files), DATA_DIRS)
+    except Exception as e:
+        print(f"  WARN: Khong tinh duoc geo5km: {e}")
+        payload["geo5km"] = None
+
     export_product_review(payload, all_df)
 
     html = render_html(payload)

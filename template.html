@@ -6,6 +6,8 @@
 <title>Báo cáo Thị phần R (CellphoneS) vs Y (MWG)</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
@@ -271,6 +273,7 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
     <li><a href="#shop">Top Shop</a></li>
     <li><a href="#kenh">Theo Hình thức xuất</a></li>
     <li><a href="#pivot">Pivot phân tích theo thời gian</a></li>
+    <li id="nav-5km"><a href="#thiphan5km">Thị phần bán kính 5km</a></li>
   </ol>
 </div>
 
@@ -439,6 +442,30 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
     <div class="pivot-info" id="pv-info">—</div>
   </div>
   <div class="pivot-wrap"><div id="pivot-container"></div></div>
+</section>
+
+<section class="section" id="thiphan5km">
+  <h2><span class="num">11.</span>Thị phần theo bán kính 5km (CellphoneS vs MWG)</h2>
+  <div class="sub">Lấy mỗi cửa hàng CellphoneS làm tâm, quét bán kính 5km, gom cửa hàng MWG (TGDĐ + Điện Máy Xanh) trong vùng để so sánh số lượng điểm bán và doanh số trung bình/cửa hàng.</div>
+  <div class="kpi-grid" id="g5-cards"></div>
+  <div class="grid2" style="margin-top:14px; align-items:start;">
+    <div><div id="map5km" style="height:540px; border-radius:12px; overflow:hidden;"></div></div>
+    <div>
+      <input id="q5km" placeholder="Tìm cửa hàng / tỉnh..." style="width:100%; padding:8px 11px; border:1px solid #d2d9e0; border-radius:8px; font-size:13px; margin-bottom:8px;">
+      <div style="max-height:496px; overflow:auto; border:1px solid #f0f2f5; border-radius:10px;">
+        <table id="tbl5km"><thead><tr>
+          <th data-k="n">Cửa hàng CPS</th>
+          <th class="center" data-k="m">MWG ≤5km</th>
+          <th class="center" data-k="t">TGDĐ</th>
+          <th class="center" data-k="d">ĐMX</th>
+          <th class="right" data-k="cr">DS CPS/th</th>
+          <th class="right" data-k="ma">DS TB MWG/th</th>
+          <th class="right" data-k="dp">Lệch %</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div class="insight" style="margin-top:14px;"><strong>Lưu ý phương pháp:</strong> Số cửa hàng MWG trong 5km tính chính xác từ tọa độ (Haversine). Doanh số CPS/cửa hàng map trực tiếp theo mã shop. Doanh số MWG/cửa hàng <b>không gắn được vào từng tọa độ</b> (mã shop trong dữ liệu doanh số khác hệ với file vị trí), nên dùng <b>trung bình cấp tỉnh</b> của MWG làm proxy → các cửa hàng CPS cùng tỉnh có cùng "DS TB MWG". "Lệch %" = (DS CPS − DS TB MWG) / DS TB MWG. Chỉ ngành đang lọc theo dữ liệu doanh số trong report.</div>
 </section>
 
 <footer>
@@ -1790,6 +1817,45 @@ document.getElementById('header-categories').textContent =
   (DATA.categories||[]).length > 1 ? `${DATA.categories.length} ngành hàng` : 'Đa ngành hàng';
 
 rebuildAll();
+/* ===== Section 5km: Thi phan theo ban kinh ===== */
+(function(){
+  var G = (typeof DATA!=='undefined') ? DATA.geo5km : null;
+  var navEl = document.getElementById('nav-5km');
+  var secEl = document.getElementById('thiphan5km');
+  if(!G || !G.stores || !G.stores.length){ if(navEl)navEl.style.display='none'; if(secEl)secEl.style.display='none'; return; }
+  var sm=G.summary, stores=G.stores, mwg=G.mwg;
+  var fmt=function(n){return n==null?'—':Number(n).toLocaleString('vi-VN');};
+  // cards
+  var cards=[['Cửa hàng CPS',sm.n_cps],['TB MWG ≤5km',sm.avg_mwg],['TB TGDĐ ≤5km',sm.avg_tgdd],
+    ['TB ĐMX ≤5km',sm.avg_dmx],['DS TB CPS/th',fmt(sm.mean_cps_rev)+'đ'],
+    ['DS TB MWG/th',fmt(sm.mean_mwg_avg)+'đ'],['Lệch TB','+'+sm.mean_dev_pct+'%']];
+  document.getElementById('g5-cards').innerHTML=cards.map(function(c,i){
+    var cls=i===0?'kpi':(i===5?'kpi y':(i===6?'kpi gap':'kpi share'));
+    return '<div class="'+cls+'"><div class="label">'+c[0]+'</div><div class="value" style="font-size:22px;">'+c[1]+'</div></div>';}).join('');
+  // map
+  var map=L.map('map5km').setView([16.0,107.5],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+  var tgdd=L.layerGroup(),dmx=L.layerGroup(),cpsL=L.layerGroup(),ring=L.layerGroup();
+  mwg.forEach(function(m){var c=L.circleMarker([m[0],m[1]],{radius:3,weight:0,fillOpacity:.55,color:m[2]===0?'#1f6feb':'#2f9e44'}).bindPopup((m[2]===0?'TGDĐ: ':'ĐMX: ')+m[3]);(m[2]===0?tgdd:dmx).addLayer(c);});
+  stores.forEach(function(s){
+    L.circleMarker([s.lat,s.lng],{radius:6,weight:2,color:'#c8102e',fillColor:'#c8102e',fillOpacity:.9}).addTo(cpsL)
+      .bindPopup('<b>'+s.n+'</b><br>'+(s.a||'')+'<br><br>MWG ≤5km: <b>'+s.m+'</b> (TGDĐ '+s.t+' · ĐMX '+s.d+')<br>DS CPS/th: <b>'+fmt(s.cr)+'đ</b><br>DS TB MWG/th: '+fmt(s.ma)+'đ<br>Lệch: <b>'+(s.dp==null?'—':(s.dp>0?'+':'')+s.dp+'%')+'</b>');
+    L.circle([s.lat,s.lng],{radius:5000,color:'#c8102e',weight:1,opacity:.30,fillOpacity:.04}).addTo(ring);
+  });
+  ring.addTo(map);dmx.addTo(map);tgdd.addTo(map);cpsL.addTo(map);
+  L.control.layers(null,{'Vòng 5km':ring,'CellphoneS':cpsL,'TGDĐ':tgdd,'Điện Máy Xanh':dmx},{collapsed:false}).addTo(map);
+  setTimeout(function(){map.invalidateSize();},300);
+  // table
+  var tb=document.querySelector('#tbl5km tbody'),sortK='m',asc=false;
+  function rowHtml(s){var dp=s.dp,col=dp==null?'':(dp>=0?'#0a8f3c':'#c8102e');
+    return '<tr data-s="'+(s.n+' '+(s.pv||'')).toLowerCase()+'"><td>'+s.n+'<br><span style="color:#9aa5b1;font-size:11px;">'+(s.pv||'')+'</span></td><td class="center">'+s.m+'</td><td class="center">'+s.t+'</td><td class="center">'+s.d+'</td><td class="right">'+fmt(s.cr)+'</td><td class="right">'+fmt(s.ma)+'</td><td class="right" style="color:'+col+';font-weight:600;">'+(dp==null?'—':(dp>0?'+':'')+dp+'%')+'</td></tr>';}
+  function render(){var a=stores.slice();a.sort(function(x,y){var p=x[sortK],q=y[sortK];if(p==null)p=-1;if(q==null)q=-1;if(typeof p==='string')return asc?p.localeCompare(q):q.localeCompare(p);return asc?p-q:q-p;});
+    var f=(document.getElementById('q5km').value||'').toLowerCase();tb.innerHTML=a.map(rowHtml).join('');
+    if(f)Array.prototype.forEach.call(tb.children,function(r){if(r.dataset.s.indexOf(f)<0)r.style.display='none';});}
+  Array.prototype.forEach.call(document.querySelectorAll('#tbl5km th'),function(h){h.style.cursor='pointer';h.onclick=function(){var k=h.dataset.k;if(sortK===k)asc=!asc;else{sortK=k;asc=false;}render();};});
+  document.getElementById('q5km').oninput=render;render();
+})();
+
 </script>
 </body>
 </html>
