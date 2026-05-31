@@ -241,10 +241,6 @@ footer { text-align: center; color: #9ca3af; font-size: 12px; padding: 16px; }
       <label>Nhóm sản phẩm</label>
       <div class="multi-select" id="f-model"></div>
     </div>
-    <div class="filter-item">
-      <label>Shop</label>
-      <div class="multi-select" id="f-shop"></div>
-    </div>
   </div>
   <div class="filter-actions">
     <button class="btn btn-preset" data-preset="all">Toàn bộ</button>
@@ -580,7 +576,7 @@ const msMien = createMultiSelect('f-mien', sortedMien, 'Tất cả miền', (s)=
 const msTinh = createMultiSelect('f-tinh', sortedTinh, 'Tất cả tỉnh', (s)=>{ filterState.tinh = s; rebuildAll(); });
 const msBrand = createMultiSelect('f-brand', sortedBrand, 'Tất cả thương hiệu', (s)=>{ filterState.brand = s; rebuildAll(); });
 const msModel = createMultiSelect('f-model', sortedModel, 'Tất cả nhóm', (s)=>{ filterState.model = s; rebuildAll(); });
-const msShop = createMultiSelect('f-shop', sortedShop, 'Tất cả shop', (s)=>{ filterState.shop = s; rebuildAll(); });
+const msShop = { clear: () => {} };  // bo loc shop da go (rows khong con cap shop)
 
 const dateFromEl = document.getElementById('f-date-from');
 const dateToEl = document.getElementById('f-date-to');
@@ -1332,15 +1328,8 @@ function rebuildAll() {
       return '<span class="tag tag-bal">Cân bằng</span>';}}
   ], tinh);
 
-  // ===== 8. Shop =====
-  const shMap = new Map();
-  const si = IDX.shop, ti2 = IDX.tinh, mi2 = IDX.mien;
-  for (const r of filtered) {
-    const k = r[si];
-    if (!shMap.has(k)) shMap.set(k, {key:k, mien_idx:r[mi2], tinh_idx:r[ti2], R:0, Y:0});
-    const v = shMap.get(k); v.R += r[IDX.R]; v.Y += r[IDX.Y];
-  }
-  const shops = [...shMap.values()].map(s=>({mien:DICT.mien[s.mien_idx], tinh:DICT.tinh[s.tinh_idx], shop:DICT.shop[s.key], R:s.R, Y:s.Y, total:s.R+s.Y}))
+  // ===== 8. Shop (tinh san tu du lieu day du; khong theo bo loc dong) =====
+  const shops = (DATA.top_shops||[]).map(s=>({mien:s.mien, tinh:s.tinh, shop:s.shop, R:s.R, Y:s.Y, total:s.R+s.Y}))
     .filter(s=>s.total>0).sort((a,b)=>b.total-a.total).slice(0,30);
   renderTable('t-shop', [
     {label:'#', render:(r,i)=>i+1},

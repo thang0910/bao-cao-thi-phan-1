@@ -85,6 +85,9 @@ def find_excel_files():
         for f in sorted(d.glob("*.xlsx")):
             if f.name.startswith("~$"):
                 continue
+            # Bo qua cac file output do chinh script sinh ra (tranh doc nham la data)
+            if f.name in ("product_review.xlsx", "product_mapping.xlsx"):
+                continue
             rp = f.resolve()
             if rp in seen:
                 continue
@@ -280,7 +283,25 @@ def build_data_json(dfs_per_file):
     monthly_total_df = monthly_df.groupby("month", as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum() if not monthly_df.empty else pd.DataFrame()
     weekly_total_df = weekly_df.groupby("week", as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum() if not weekly_df.empty else pd.DataFrame()
 
-    leaf = extract_leaf(all_df)
+    leaf_full = extract_leaf(all_df)
+
+    # === Top Shop: tinh san tu du lieu day du (truoc khi rut gon) ===
+    _ts = leaf_full.groupby(["Mien", "TinhThanh", "TenShop"], as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum()
+    _ts["_t"] = _ts["R_DoanhSo"] + _ts["Y_DoanhSo"]
+    _ts = _ts[_ts["_t"] > 0].sort_values("_t", ascending=False).head(50)
+    top_shops = [{"mien": str(r.Mien), "tinh": str(r.TinhThanh), "shop": str(r.TenShop),
+                  "R": float(r.R_DoanhSo), "Y": float(r.Y_DoanhSo)} for r in _ts.itertuples()]
+
+    # === Rut gon leaf cho payload rows de giam dung luong file ===
+    # Bo cap Shop/Quan + gom theo TUAN (giu 1 ngay dai dien moi tuan) -> nhe ~8-10x.
+    # Van giu Mien/Tinh/Brand/Model/SanPham/HinhThuc -> moi bo loc & bao cao van chay;
+    # bieu do thang/tuan dung; bieu do ngay/thu chi con do phan giai cap tuan.
+    _gcols = ["Nam_Tuan", "Mien", "TinhThanh", "NganhHang", "ThuongHieu", "Model", "TenSanPham", "HinhThucXuat"]
+    leaf = leaf_full.groupby(_gcols, as_index=False, dropna=False).agg(
+        R_DoanhSo=("R_DoanhSo", "sum"), Y_DoanhSo=("Y_DoanhSo", "sum"), Date=("Date", "min"))
+    leaf["QuanHuyen"] = "(gộp)"
+    leaf["TenShop"] = "(gộp)"
+    print(f"  Rut gon rows: {len(leaf_full):,} -> {len(leaf):,} dong (bo shop/quan, gom theo tuan)")
 
     brand_sub = sub_group(all_df, 9, "ThuongHieu")
     modelgroup_sub = sub_group(all_df, 10, "Model")
@@ -409,6 +430,7 @@ def build_data_json(dfs_per_file):
             "product_canonical": canonical_display,
         },
         "product_to_canonical": product_canonical_idx,
+        "top_shops": top_shops,
         "rows": rows,
         "row_schema": ["date", "nganhhang", "mien", "tinh", "quan", "shop",
                        "brand", "model", "product", "hinhthuc", "R", "Y"],
