@@ -2,7 +2,7 @@ name: Build & Deploy Report
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # tu dong kiem tra folder Drive moi 10 phut
+    - cron: "0 */2 * * *"    # kiem tra folder Drive moi 2 gio (tranh Drive chan toc do khi tai nhieu file)
   workflow_dispatch:          # nut "Run workflow" bam tay
   push:
     branches: [main]          # push code (build_report.py, template...) cung build lai
@@ -44,12 +44,20 @@ jobs:
       - name: Download data from Google Drive
         run: |
           rm -f data/*.xlsx
-          rm -rf drive_data
-          gdown --folder "$DRIVE_FOLDER_URL" -O drive_data
           mkdir -p data
+          # Thu tai nhieu lan vi Google Drive co the chan toc do khi tai nhieu file
+          for attempt in 1 2 3 4 5 6; do
+            rm -rf drive_data
+            if gdown --folder "$DRIVE_FOLDER_URL" -O drive_data; then
+              echo "gdown OK (lan $attempt)"
+              break
+            fi
+            echo "gdown that bai (lan $attempt) - co the bi Drive chan toc do. Cho 45s roi thu lai..."
+            sleep 45
+          done
           find drive_data -name '*.xlsx' -exec cp {} data/ \;
           echo "Data files in data/:"
-          ls -la data/*.xlsx || (echo "KHONG tai duoc file .xlsx nao tu Drive (kiem tra quyen chia se folder)" && exit 1)
+          ls -la data/*.xlsx || (echo "KHONG tai duoc file .xlsx nao tu Drive (kiem tra quyen chia se folder / bi chan toc do)" && exit 1)
 
       - name: Compute data hash
         id: hash
