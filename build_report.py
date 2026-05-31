@@ -107,8 +107,48 @@ def _read_xlsx_safe(path):
     return io.BytesIO(data)
 
 
+# Cot cua dinh dang phang moi (BI export): header o dong 3, moi dong 1 giao dich
+NEW_FLAT_COLS = [
+    "Nam_Thang", "Nam_Tuan", "Date", "Mien", "TinhThanh", "QuanHuyen", "TenShop",
+    "NganhHang", "ThuongHieu", "Model", "TenSanPham", "HinhThucXuat",
+    "DoanhSo", "PctCty", "Cty",
+]
+
+
+def read_flat_file(path):
+    """Doc dinh dang phang moi: 15 cot, cot 'Cong ty' = R hoac Y, moi dong 1 giao dich.
+    Gop thanh leaf wide rows (R_DoanhSo, Y_DoanhSo) tuong duong format cu (level 12)."""
+    df = pd.read_excel(_read_xlsx_safe(path), sheet_name=0, header=2)
+    if df.shape[1] != 15:
+        raise ValueError(f"File {path.name} (flat) co {df.shape[1]} cot, ky vong 15.")
+    df.columns = NEW_FLAT_COLS
+    df["Cty"] = df["Cty"].astype(str).str.upper().str.strip()
+    df = df[df["Cty"].isin(["R", "Y"])].copy()
+    df["DoanhSo"] = pd.to_numeric(df["DoanhSo"], errors="coerce").fillna(0)
+    df["R_DoanhSo"] = df["DoanhSo"].where(df["Cty"] == "R", 0.0)
+    df["Y_DoanhSo"] = df["DoanhSo"].where(df["Cty"] == "Y", 0.0)
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    leaf = df.groupby(DIMENSION_COLS_FULL, as_index=False, dropna=False)[["R_DoanhSo", "Y_DoanhSo"]].sum()
+    leaf["R_Pct"] = 0.0
+    leaf["Y_Pct"] = 0.0
+    leaf = leaf[DIMENSION_COLS_FULL + ["R_DoanhSo", "R_Pct", "Y_DoanhSo", "Y_Pct"]]
+    leaf["_level"] = 12
+    leaf["_source_file"] = path.name
+    print(f"    Format: phang 15 cot (BI export) - {len(leaf):,} dong leaf")
+    return leaf
+
+
 def read_one_file(path):
     print(f"  Doc: {path.name}")
+    # Phat hien dinh dang phang moi: peek 4 dong dau, tim chu 'Cong ty'
+    try:
+        peek = pd.read_excel(_read_xlsx_safe(path), sheet_name=0, header=None, nrows=4)
+        is_flat = peek.astype(str).apply(lambda c: c.str.contains("Công ty", na=False)).to_numpy().any()
+    except Exception:
+        is_flat = False
+    if is_flat:
+        return read_flat_file(path)
+
     df = pd.read_excel(_read_xlsx_safe(path), sheet_name=0, header=[0, 1])
     n_cols = df.shape[1]
 
@@ -151,6 +191,8 @@ def read_one_file(path):
 
 def detect_file_categories(df):
     cats = df[df["_level"] == 8]["NganhHang"].dropna().unique().tolist()
+    if not cats:  # dinh dang phang: khong co level 8 -> lay tu leaf
+        cats = df[df["_level"] == 12]["NganhHang"].dropna().unique().tolist()
     cats = sorted([c for c in cats if c != "Total"])
     return cats
 
@@ -193,9 +235,11 @@ def extract_leaf(df):
 
 
 def sub_group(df, level, cols):
-    s = df[df["_level"] == level].copy()
     if isinstance(cols, str):
         cols = [cols]
+    s = df[df["_level"] == level]
+    if s.empty:  # dinh dang phang khong co dong Total -> tinh tu leaf (level 12)
+        s = df[df["_level"] == 12]
     return s.groupby(cols, as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum()
 
 
@@ -220,6 +264,14 @@ def build_data_json(dfs_per_file):
         weekly_df["_tot"] = weekly_df["R_DoanhSo"] + weekly_df["Y_DoanhSo"]
         weekly_df = weekly_df.sort_values("_tot", ascending=False).drop_duplicates(["week", "NganhHang"])
         weekly_df = weekly_df.sort_values(["week", "NganhHang"]).drop(columns=["_tot"])
+
+    # === Dinh dang phang (chi co leaf, khong co dong Total) ===
+    # Tinh monthly/weekly truc tiep tu leaf de tranh loi gop file p1/p2 bi trung thang.
+    is_flat = (not all_df.empty) and (int((all_df["_level"] < 12).sum()) == 0)
+    if is_flat:
+        Lf = all_df[all_df["_level"] == 12]
+        monthly_df = Lf.groupby(["Nam_Thang", "NganhHang"], as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum().rename(columns={"Nam_Thang": "month"})
+        weekly_df = Lf.groupby(["Nam_Tuan", "NganhHang"], as_index=False)[["R_DoanhSo", "Y_DoanhSo"]].sum().rename(columns={"Nam_Tuan": "week"})
 
     grand_R = float(monthly_df["R_DoanhSo"].sum()) if not monthly_df.empty else 0
     grand_Y = float(monthly_df["Y_DoanhSo"].sum()) if not monthly_df.empty else 0

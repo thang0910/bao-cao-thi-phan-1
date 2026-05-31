@@ -74,6 +74,9 @@ def build_geo5km(all_df, n_months, data_dirs):
     df = all_df
     shop = df[(df["TenShop"].notna()) & (df["TenShop"].astype(str) != "Total") &
               (df["NganhHang"].astype(str) == "Total")].copy()
+    if shop.empty:  # dinh dang phang: khong co dong shop-subtotal -> dung leaf (level 12)
+        shop = df[(df["_level"] == 12) & (df["TenShop"].notna()) &
+                  (df["TenShop"].astype(str) != "Total")].copy()
     shop["TenShop"] = shop["TenShop"].astype(str)
     cps_rev = {}
     yprov = {}
