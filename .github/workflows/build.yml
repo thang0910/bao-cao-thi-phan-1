@@ -45,7 +45,7 @@ jobs:
         run: |
           rm -f data/*.xlsx
           rm -rf drive_data
-          gdown --folder "$DRIVE_FOLDER_URL" -O drive_data --remaining-ok
+          gdown --folder "$DRIVE_FOLDER_URL" -O drive_data
           mkdir -p data
           find drive_data -name '*.xlsx' -exec cp {} data/ \;
           echo "Data files in data/:"
