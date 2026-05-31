@@ -1,9 +1,11 @@
 name: Build & Deploy Report
 
 on:
+  schedule:
+    - cron: "*/10 * * * *"   # tu dong kiem tra folder Drive moi 10 phut
+  workflow_dispatch:          # nut "Run workflow" bam tay
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [main]          # push code (build_report.py, template...) cung build lai
 
 permissions:
   contents: read
@@ -14,9 +16,15 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+env:
+  # Folder Google Drive (chia se "Anyone with the link") chua file data .xlsx
+  DRIVE_FOLDER_URL: "https://drive.google.com/drive/folders/1UXlgEJYlqKj0JnweHLfPXua11diDHSgw"
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.gate.outputs.changed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,38 +39,83 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install gdown
 
-      - name: List data files
+      - name: Download data from Google Drive
         run: |
-          echo "Data files found:"
-          ls -la data/ || echo "(thu muc data/ chua co)"
+          rm -f data/*.xlsx
+          rm -rf drive_data
+          gdown --folder "$DRIVE_FOLDER_URL" -O drive_data --remaining-ok
+          mkdir -p data
+          find drive_data -name '*.xlsx' -exec cp {} data/ \;
+          echo "Data files in data/:"
+          ls -la data/*.xlsx || (echo "KHONG tai duoc file .xlsx nao tu Drive (kiem tra quyen chia se folder)" && exit 1)
+
+      - name: Compute data hash
+        id: hash
+        run: |
+          H=$(cat $(ls data/*.xlsx | sort) | sha256sum | cut -d' ' -f1)
+          echo "h=$H" >> "$GITHUB_OUTPUT"
+          echo "Data hash: $H"
+
+      - name: Check if this data was already built
+        id: cache_check
+        uses: actions/cache/restore@v4
+        with:
+          path: .build_marker
+          key: built-${{ steps.hash.outputs.h }}
+          lookup-only: true
+
+      - name: Decide whether to build
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Su kien ${{ github.event_name }} -> luon build lai."
+          elif [ "${{ steps.cache_check.outputs.cache-hit }}" = "true" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Data khong doi -> bo qua build/deploy."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Data moi tren Drive -> tien hanh build."
+          fi
 
       - name: Build HTML report
+        if: steps.gate.outputs.changed == 'true'
         run: python build_report.py
 
       - name: Encrypt with StatiCrypt
+        if: steps.gate.outputs.changed == 'true'
         run: |
           npm install -g staticrypt
           staticrypt index.html -p "${{ secrets.REPORT_PASSWORD }}" --short -d encrypted
           mv encrypted/index.html index.html
           echo "Encrypted index.html generated"
 
-      - name: Show output
-        run: |
-          echo "Generated files:"
-          ls -la index.html
-          echo "Size: $(du -h index.html | cut -f1)"
-
       - name: Setup Pages
+        if: steps.gate.outputs.changed == 'true'
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
+        if: steps.gate.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: "."
 
+      - name: Save build marker (de lan sau biet data nay da build)
+        if: steps.gate.outputs.changed == 'true'
+        run: echo "${{ steps.hash.outputs.h }}" > .build_marker
+
+      - name: Cache build marker
+        if: steps.gate.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .build_marker
+          key: built-${{ steps.hash.outputs.h }}
+
   deploy:
     needs: build
+    if: needs.build.outputs.changed == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
