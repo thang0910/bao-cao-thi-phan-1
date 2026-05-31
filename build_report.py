@@ -17,6 +17,7 @@ import io
 import pandas as pd
 
 from product_normalize import normalize_canonical, load_manual_mapping
+import os, io, urllib.request
 from vn_region import lookup_mien
 import geo5km
 
@@ -28,6 +29,39 @@ OUTPUT_HTML = SCRIPT_DIR / "index.html"
 TEMPLATE_HTML = SCRIPT_DIR / "template.html"
 MAPPING_FILE = SCRIPT_DIR / "product_mapping.xlsx"
 REVIEW_FILE = SCRIPT_DIR / "product_review.xlsx"
+
+# === Google Sheet dinh danh ten san pham (published CSV) ===
+# Link "Publish to web" cua sheet Mapping. Co the override bang bien moi truong GSHEET_CSV_URL.
+GSHEET_CSV_URL = os.environ.get(
+    "GSHEET_CSV_URL",
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vTzPo4gzB6LvyseHT7V9JpgzO8OGg92v7jzeGLMq6gQ46TNOcBrR2c9uuZs8VCWC5snZr0k9jnbXElg/pub?gid=513085925&single=true&output=csv",
+)
+
+
+def load_gsheet_mapping():
+    """Doc mapping {original: ten_chung} tu Google Sheet (CSV publish-to-web)."""
+    if not GSHEET_CSV_URL:
+        return {}
+    try:
+        req = urllib.request.Request(GSHEET_CSV_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            raw = r.read()
+        df = pd.read_csv(io.BytesIO(raw))
+    except Exception as e:
+        print(f"  WARN: Khong tai duoc Google Sheet CSV: {e}")
+        return {}
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    if "original" not in df.columns or "ten_chung" not in df.columns:
+        print("  WARN: CSV thieu cot 'original' hoac 'ten_chung'.")
+        return {}
+    m = {}
+    for _, row in df.iterrows():
+        o = str(row["original"]).strip()
+        c = str(row["ten_chung"]).strip()
+        if o and c and o.lower() != "nan" and c.lower() != "nan":
+            m[o] = c
+    print(f"  Doc {len(m)} mapping tu Google Sheet (CSV)")
+    return m
 
 # Format day du (16 cot, co Mien va Quan Huyen)
 DIMENSION_COLS_FULL = [
@@ -221,7 +255,9 @@ def build_data_json(dfs_per_file):
 
     # === Canonical product names: gom cac variant cua cung 1 SP ===
     # Buoc 1: doc manual mapping (neu co)
-    manual_map = load_manual_mapping(MAPPING_FILE)
+    manual_map = load_gsheet_mapping()
+    if not manual_map:
+        manual_map = load_manual_mapping(MAPPING_FILE)
 
     # Buoc 2: voi moi product, xac dinh brand chinh (brand co doanh so cao nhat cho product do)
     prod_brand_map = {}
