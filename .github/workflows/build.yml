@@ -104,11 +104,20 @@ jobs:
         if: steps.gate.outputs.changed == 'true'
         uses: actions/configure-pages@v5
 
+      - name: Chuan bi site (CHI deploy index.html da ma hoa)
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp index.html _site/index.html
+          echo "Chi deploy index.html (khong deploy data/source de tranh lo du lieu)"
+          ls -la _site
+
       - name: Upload artifact
         if: steps.gate.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "."
+          path: "_site"
 
       - name: Save build marker (de lan sau biet data nay da build)
         if: steps.gate.outputs.changed == 'true'
